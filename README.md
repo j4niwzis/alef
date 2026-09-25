@@ -67,6 +67,14 @@ cmake --build build
 ctest --test-dir build
 ```
 
+The tests are googletest's, as a module:
+[j4niwzis/googletest-modules](https://github.com/j4niwzis/googletest-modules),
+fetched by [cmake-everywhere](https://github.com/j4niwzis/cmake-everywhere)
+at a pinned commit. Configured with `-DALEF_CONSTEXPR_TESTS=ON`, as CI is,
+the compiler runs every test as well, as a constant expression. A test that
+is not one does not stop the build: it fails when the tests run, and compiles
+itself alone to show what the compiler says of it.
+
 Reading the UCD is more constant evaluation than clang allows by default, so
 the `alef` target raises the bound with `-fconstexpr-steps=100000000`, and
 raises it for its users as well: with modules, whoever imports alef may
