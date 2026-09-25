@@ -49,10 +49,20 @@ later. All of it is constexpr.
   same text in UTF-16 and UTF-32 comes apart into the same clusters.
 
 `import alef;` is all of it, and each part is a module of its own as well --
-`alef.utf`, `alef.grapheme` -- with a CMake target of its own: `alef::utf`,
-`alef::grapheme`, and `alef::alef` for all. Each table is a module of its
+`alef.utf`, `alef.grapheme`, `alef.normalization` -- with a CMake target of
+its own: `alef::utf`, `alef::grapheme`, `alef::normalization`, and
+`alef::alef` for all. Each table is a module of its
 own too, importing nothing of the library but the reader of the UCD, so a
 change to the library does not compile a table again.
+- **Normalization** (UAX #15). `alef::as_nfc`, `alef::as_nfd`,
+  `alef::as_nfkc` and `alef::as_nfkd` read text in any UTF and give it in the
+  form as code points -- `| alef::as_utf8` makes it UTF-8 again -- a piece at
+  a time: from a code point nothing after it is reordered past or composed
+  with anything before, to the next such. `alef::is_nfc` and the others ask
+  the quick check first and normalize only where it says maybe, and
+  `alef::canonical_combining_class` is there too. Checked against every line
+  of `NormalizationTest.txt` in all four forms, and against every code point
+  it does not list, which is its own normalization in each.
 
 Text is a string, a view of one, a string literal (without the NUL it ends
 in), or any other range of code units. A view made of a temporary string
