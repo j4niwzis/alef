@@ -42,7 +42,9 @@ later. All of it is constexpr.
   and `alef::is_grapheme_boundary` work on iterators into the text, and the
   properties the rules are decided by are there too:
   `alef::grapheme_cluster_break_of`, `alef::indic_conjunct_break_of` and
-  `alef::is_extended_pictographic`. Checked against every line of
+  `alef::is_extended_pictographic`, all three one byte a code point in a
+  table of two stages built from the ranges while the interface is compiled:
+  32 KB, and two reads a code point. Checked against every line of
   `GraphemeBreakTest.txt` forwards, backwards and at every byte, and the
   same text in UTF-16 and UTF-32 comes apart into the same clusters.
 

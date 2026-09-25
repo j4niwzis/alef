@@ -126,34 +126,190 @@ constexpr auto conjunct_break =
 constexpr auto pictographic =
     ucd::property<bool, emoji_file, &pictographic_of>;
 
+// All the rules ask of a code point, in one byte: Grapheme_Cluster_Break in
+// the low four bits, Indic_Conjunct_Break in the two above them, and whether
+// it is Extended_Pictographic in the one above those. Zero is Other, None,
+// and not.
+struct packed {
+  std::uint8_t bits = 0;
+
+  constexpr grapheme_cluster_break grapheme_break() const noexcept {
+    return static_cast<grapheme_cluster_break>(bits & 0x0F);
+  }
+  constexpr indic_conjunct_break conjunct_break() const noexcept {
+    return static_cast<indic_conjunct_break>((bits >> 4) & 0x03);
+  }
+  constexpr bool pictographic() const noexcept { return (bits & 0x40) != 0; }
+};
+
+constexpr std::uint8_t pack(grapheme_cluster_break grapheme,
+                            indic_conjunct_break conjunct,
+                            bool is_pictographic) noexcept {
+  return static_cast<std::uint8_t>(static_cast<unsigned>(grapheme) |
+                                   static_cast<unsigned>(conjunct) << 4 |
+                                   (is_pictographic ? 0x40u : 0u));
+}
+
+// The three merged: runs of code points with the same byte, in order, where
+// it is not zero. A run ends wherever a range of any of the three begins or
+// ends, and runs of the same byte side by side are one.
+struct run {
+  char32_t first = 0;
+  char32_t last = 0;
+  std::uint8_t bits = 0;
+};
+
+constexpr std::vector<run> runs() {
+  std::vector<run> out;
+  // Where each of the three is: the first of its ranges that does not end
+  // before the code point. They are walked side by side, once.
+  std::size_t in_break = 0;
+  std::size_t in_conjunct = 0;
+  std::size_t in_pictographic = 0;
+  for (char32_t code_point = 0; code_point <= 0x10FFFF;) {
+    // Where the next of the three may change.
+    char32_t next = 0x110000;
+    const auto value = [&](const auto& ranges, std::size_t& index,
+                           auto otherwise) {
+      while (index < ranges.size() && ranges[index].last < code_point)
+        ++index;
+      if (index == ranges.size())
+        return otherwise;
+      if (ranges[index].first > code_point) {
+        next = std::min(next, ranges[index].first);
+        return otherwise;
+      }
+      next = std::min(next, static_cast<char32_t>(ranges[index].last + 1));
+      return ranges[index].value;
+    };
+    const std::uint8_t bits = pack(
+        value(grapheme_break, in_break, grapheme_cluster_break::other),
+        value(conjunct_break, in_conjunct, indic_conjunct_break::none),
+        value(pictographic, in_pictographic, false));
+    const auto last = static_cast<char32_t>(next - 1);
+    if (bits != 0) {
+      if (!out.empty() && out.back().last + 1 == code_point &&
+          out.back().bits == bits)
+        out.back().last = last;
+      else
+        out.push_back({code_point, last, bits});
+    }
+    code_point = next;
+  }
+  return out;
+}
+
+// A table of two stages, which is what makes a code point's properties two
+// reads and no search: Unicode in blocks of 256 code points, each block the
+// index of the block of bytes it is the same as, and those blocks, each kept
+// once. For Unicode 18.0.0, 111 of them are all 4352 blocks of it.
+inline constexpr std::size_t block_size = 256;
+inline constexpr std::size_t block_count = 0x110000 / block_size;
+
+struct layout {
+  std::vector<std::size_t> index;
+  std::vector<std::uint8_t> blocks;
+};
+
+constexpr layout lay_out() {
+  const std::vector<run> all = runs();
+  layout out;
+  out.index.reserve(block_count);
+  // A sum of each block kept, so that few are compared in full; and the
+  // block that is all of one byte, for each byte one is all of.
+  std::vector<std::uint32_t> sums;
+  std::array<std::size_t, 256> all_of{};
+  all_of.fill(block_count);
+  std::array<std::uint8_t, block_size> bytes{};
+  const auto keep = [&] {
+    std::uint32_t sum = 0;
+    for (const std::uint8_t byte : bytes)
+      sum = sum * 31 + byte;
+    for (std::size_t kept = 0; kept < sums.size(); ++kept)
+      if (sums[kept] == sum &&
+          std::ranges::equal(bytes, std::span(out.blocks)
+                                        .subspan(kept * block_size, block_size)))
+        return kept;
+    sums.push_back(sum);
+    out.blocks.insert(out.blocks.end(), bytes.begin(), bytes.end());
+    return sums.size() - 1;
+  };
+  std::size_t at = 0;  // the first run that does not end before the block
+  for (std::size_t block = 0; block < block_count; ++block) {
+    const auto start = static_cast<char32_t>(block * block_size);
+    const auto end = static_cast<char32_t>(start + block_size - 1);
+    while (at < all.size() && all[at].last < start)
+      ++at;
+    // All of one byte: no run in it, or one run over all of it -- which is
+    // most of Unicode, and is not written out to be found so.
+    std::optional<std::uint8_t> same;
+    if (at == all.size() || all[at].first > end)
+      same = 0;
+    else if (all[at].first <= start && all[at].last >= end)
+      same = all[at].bits;
+    if (same) {
+      if (all_of[*same] == block_count) {
+        bytes.fill(*same);
+        all_of[*same] = keep();
+      }
+      out.index.push_back(all_of[*same]);
+      continue;
+    }
+    bytes.fill(0);
+    for (std::size_t one = at; one < all.size() && all[one].first <= end; ++one)
+      for (char32_t code_point = std::max(all[one].first, start);
+           code_point <= std::min(all[one].last, end); ++code_point)
+        bytes[code_point - start] = all[one].bits;
+    out.index.push_back(keep());
+  }
+  return out;
+}
+
+inline constexpr std::size_t distinct_blocks =
+    lay_out().blocks.size() / block_size;
+static_assert(distinct_blocks <= 65536);
+
+using block_index =
+    std::conditional_t<(distinct_blocks <= 256), std::uint8_t, std::uint16_t>;
+
+struct two_stages {
+  std::array<block_index, block_count> index;
+  std::array<std::uint8_t, distinct_blocks * block_size> bytes;
+};
+
+inline constexpr two_stages table = [] {
+  const layout laid = lay_out();
+  two_stages out{};
+  for (std::size_t block = 0; block < block_count; ++block)
+    out.index[block] = static_cast<block_index>(laid.index[block]);
+  std::ranges::copy(laid.blocks, out.bytes.begin());
+  return out;
+}();
+
+constexpr packed properties_of(char32_t code_point) noexcept {
+  if (code_point > 0x10FFFF)
+    return {};
+  return {table.bytes[std::size_t{table.index[code_point / block_size]} *
+                          block_size +
+                      code_point % block_size]};
+}
+
 }  // namespace alef::tables
 
 export namespace alef {
 
 constexpr grapheme_cluster_break grapheme_cluster_break_of(
     char32_t code_point) noexcept {
-  // ASCII as the file says it: controls, CR, LF, and nothing else but Other.
-  if (code_point < 0x80) {
-    if (code_point == U'\r')
-      return grapheme_cluster_break::cr;
-    if (code_point == U'\n')
-      return grapheme_cluster_break::lf;
-    if (code_point < 0x20 || code_point == 0x7F)
-      return grapheme_cluster_break::control;
-    return grapheme_cluster_break::other;
-  }
-  return ucd::lookup(tables::grapheme_break, code_point,
-                     grapheme_cluster_break::other);
+  return tables::properties_of(code_point).grapheme_break();
 }
 
 constexpr indic_conjunct_break indic_conjunct_break_of(
     char32_t code_point) noexcept {
-  return ucd::lookup(tables::conjunct_break, code_point,
-                     indic_conjunct_break::none);
+  return tables::properties_of(code_point).conjunct_break();
 }
 
 constexpr bool is_extended_pictographic(char32_t code_point) noexcept {
-  return ucd::lookup(tables::pictographic, code_point, false);
+  return tables::properties_of(code_point).pictographic();
 }
 
 }  // namespace alef
@@ -202,17 +358,27 @@ class cluster_rules {
   // before a boundary are an even number of them, and neither GB9c nor GB11
   // reaches back past one.
   constexpr explicit cluster_rules(char32_t first) noexcept
-      : before_(grapheme_cluster_break_of(first)),
-        odd_indicators_(before_ == grapheme_cluster_break::regional_indicator),
-        pictographic_(is_extended_pictographic(first)),
-        linker_(indic_conjunct_break_of(first) == indic_conjunct_break::linker) {}
+      : cluster_rules(tables::properties_of(first)) {}
 
   // Whether `next` goes on with the cluster, which takes it in if it does.
   constexpr bool joins(char32_t next) noexcept {
     using enum grapheme_cluster_break;
-    const grapheme_cluster_break after = grapheme_cluster_break_of(next);
-    const indic_conjunct_break conjunct = indic_conjunct_break_of(next);
-    const bool next_pictographic = is_extended_pictographic(next);
+    // An ASCII code point is CR, LF, a control or Other, and nothing else the
+    // rules ask about: what they come to for it is said here, without them.
+    if (next < 0x80) {
+      const bool joined =
+          before_ == cr ? next == U'\n'
+                        : before_ == prepend && next >= 0x20 && next != 0x7F;
+      if (!joined)
+        return false;
+      before_ = next == U'\n' ? lf : other;
+      odd_indicators_ = pictographic_ = pictographic_zwj_ = linker_ = false;
+      return true;
+    }
+    const tables::packed properties = tables::properties_of(next);
+    const grapheme_cluster_break after = properties.grapheme_break();
+    const indic_conjunct_break conjunct = properties.conjunct_break();
+    const bool next_pictographic = properties.pictographic();
     bool joined = false;
     if (before_ == cr && after == lf)
       joined = true;  // GB3
@@ -248,6 +414,13 @@ class cluster_rules {
   }
 
  private:
+  // One code point's properties, read once for all three.
+  constexpr explicit cluster_rules(tables::packed first) noexcept
+      : before_(first.grapheme_break()),
+        odd_indicators_(before_ == grapheme_cluster_break::regional_indicator),
+        pictographic_(first.pictographic()),
+        linker_(first.conjunct_break() == indic_conjunct_break::linker) {}
+
   grapheme_cluster_break before_ = grapheme_cluster_break::other;
   // An odd number of regional indicators in a row ends it (GB12, GB13).
   bool odd_indicators_ = false;
@@ -264,6 +437,16 @@ template <code_unit Unit, class I, class S>
 constexpr I next_boundary(I from, const S& last) {
   if (from == last)
     return from;
+  // Most text is mostly ASCII, and between two ASCII code points the rules
+  // come to a boundary, but inside CR LF -- after which there is one, LF
+  // being a control. So that much is said without reading the rules.
+  if (const auto unit = static_cast<std::uint32_t>(*from); unit < 0x80) {
+    I after = std::ranges::next(from);
+    if (after == last)
+      return after;
+    if (const auto next = static_cast<std::uint32_t>(*after); next < 0x80)
+      return unit == U'\r' && next == U'\n' ? std::ranges::next(after) : after;
+  }
   bool well_formed = false;
   I at = from;
   cluster_rules rules(read<Unit>(at, last, well_formed));
@@ -316,6 +499,11 @@ struct with_option
 template <code_unit Unit, class I, class S>
 constexpr bool boundary_at(const I& first, const I& at, const S& bound) {
   using enum grapheme_cluster_break;
+  // ASCII on both sides: a boundary, but inside CR LF.
+  if (const auto unit = static_cast<std::uint32_t>(*at),
+      before = static_cast<std::uint32_t>(*std::ranges::prev(at));
+      unit < 0x80 && before < 0x80)
+    return !(before == U'\r' && unit == U'\n');
   const auto code_point = [&](I where) {
     bool well_formed = false;
     return read<Unit>(where, bound, well_formed);
