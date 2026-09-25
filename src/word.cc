@@ -236,6 +236,22 @@ constexpr bool is_boundary(const I& first, const I& at, const S& last) {
   return boundary_at<Unit>(first, at, last);
 }
 
+// Whether all that decides the boundary at `p` has been read, when `e` is
+// only where the text read so far ends: the code point at `p`, and the next
+// one that WB4 counts after it -- the furthest the rules look ahead -- with a
+// code unit more after that, so that none of them was cut off.
+template <code_unit Unit, class I>
+constexpr bool settled(I p, const I& e) {
+  if (p == e)
+    return false;
+  bool well_formed = false;
+  read<Unit>(p, e, well_formed);
+  while (p != e)
+    if (!ignorable(property_of(read<Unit>(p, e, well_formed))))
+      return p != e;
+  return false;
+}
+
 }  // namespace alef::detail::word_rules
 
 export namespace alef {
@@ -379,13 +395,101 @@ class word_view : public std::ranges::view_interface<word_view<V>> {
   V base_ = V();
 };
 
-// text | words, or words(text).
+// The pieces between word boundaries of text that can be read only once --
+// a stream, say. What is read is kept until the boundary after it is
+// settled, and each piece is a string_view of it, good until the next.
+template <std::ranges::view V>
+  requires utf_range<V> && (!std::ranges::forward_range<V>)
+class word_input_view : public std::ranges::view_interface<word_input_view<V>> {
+  using Unit = detail::unit_of<V>;
+
+ public:
+  class iterator {
+   public:
+    using value_type = std::basic_string_view<Unit>;
+    using difference_type = std::ptrdiff_t;
+    using iterator_concept = std::input_iterator_tag;
+
+    constexpr explicit iterator(word_input_view* view) : view_(view) {}
+    iterator(iterator&&) = default;
+    iterator& operator=(iterator&&) = default;
+
+    constexpr value_type operator*() const { return view_->piece(); }
+    constexpr iterator& operator++() {
+      view_->advance();
+      return *this;
+    }
+    constexpr void operator++(int) { ++*this; }
+    friend constexpr bool operator==(const iterator& one, std::default_sentinel_t) {
+      return one.view_->done_;
+    }
+
+   private:
+    word_input_view* view_;
+  };
+
+  constexpr explicit word_input_view(V base) : base_(std::move(base)) {}
+
+  constexpr iterator begin() {
+    at_.emplace(std::ranges::begin(base_));
+    find();
+    return iterator(this);
+  }
+  constexpr std::default_sentinel_t end() const noexcept { return {}; }
+
+ private:
+  constexpr bool pull() {
+    if (*at_ == std::ranges::end(base_)) {
+      read_all_ = true;
+      return false;
+    }
+    buffer_.push_back(static_cast<Unit>(**at_));
+    ++*at_;
+    return true;
+  }
+  // The piece at the start of what is kept: read on until its end is sure.
+  constexpr void find() {
+    if (buffer_.empty() && !pull()) {
+      done_ = true;
+      return;
+    }
+    for (;;) {
+      const auto first = buffer_.cbegin();
+      const auto last = buffer_.cend();
+      const auto boundary = detail::word_rules::next_boundary<Unit>(first, last);
+      if (read_all_ || detail::word_rules::settled<Unit>(boundary, last)) {
+        end_ = static_cast<std::size_t>(boundary - first);
+        return;
+      }
+      pull();
+    }
+  }
+  constexpr void advance() {
+    buffer_.erase(0, end_);
+    end_ = 0;
+    find();
+  }
+  constexpr std::basic_string_view<Unit> piece() const { return {buffer_.data(), end_}; }
+
+  V base_;
+  std::optional<std::ranges::iterator_t<V>> at_;
+  std::basic_string<Unit> buffer_;
+  std::size_t end_ = 0;
+  bool read_all_ = false;
+  bool done_ = false;
+};
+
+// text | words, or words(text): subranges of text read more than once, and
+// kept pieces of text read once.
 struct words_fn : std::ranges::range_adaptor_closure<words_fn> {
   template <std::ranges::viewable_range Range>
-    requires utf_range<Range> && std::ranges::forward_range<detail::all_of_t<Range>>
+    requires utf_range<Range>
   constexpr auto operator()(Range&& range) const {
-    return word_view<detail::all_of_t<Range>>(
-        detail::all_of(std::forward<Range>(range)));
+    using View = detail::all_of_t<Range>;
+    if constexpr (std::ranges::forward_range<View>)
+      return word_view<View>(detail::all_of(std::forward<Range>(range)));
+    else
+      return word_input_view<View>(detail::all_of(std::forward<Range>(range)));
   }
 };
 inline constexpr words_fn words{};

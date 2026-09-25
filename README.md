@@ -62,8 +62,11 @@ change to the library does not compile a table again.
   and bidirectional if the text is. `alef::next_word_boundary`,
   `alef::prev_word_boundary`, `alef::is_word_boundary` and
   `alef::word_break_of` are there too. Checked against every line of
-  `WordBreakTest.txt` forwards, backwards and at every byte, and in UTF-16
-  and UTF-32.
+  `WordBreakTest.txt` forwards, backwards, at every byte and read once, and
+  in UTF-16 and UTF-32. Over text that can be read only once -- a stream,
+  say -- `alef::words` keeps what it reads until the boundary after it is
+  settled, and each piece is a `std::basic_string_view` of that, good until
+  the next one.
 - **Sentences** (UAX #29). `text | alef::sentences` takes text in any UTF
   apart into sentences -- each with the spaces after it and the paragraph
   separator that ends it, if one does -- by the rules of Unicode 18.0.0,
