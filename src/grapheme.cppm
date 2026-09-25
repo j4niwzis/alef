@@ -1,10 +1,10 @@
 // Grapheme clusters: what a reader takes for one character.
 //
-// The rules are those of UAX #29, Unicode Text Segmentation, for extended
-// grapheme clusters, and the properties they are decided by are read from
-// the Unicode Character Database of the same version -- Grapheme_Cluster_Break
-// from GraphemeBreakProperty.txt, Indic_Conjunct_Break from
-// DerivedCoreProperties.txt, Extended_Pictographic from emoji-data.txt.
+// The rules are those of UAX #29, Unicode Text Segmentation, revision 49, for
+// extended grapheme clusters, and the properties they are decided by are read
+// from the Unicode Character Database of the same version:
+// Grapheme_Cluster_Break from GraphemeBreakProperty.txt, Indic_Conjunct_Break
+// from DerivedCoreProperties.txt, Extended_Pictographic from emoji-data.txt.
 export module alef:grapheme;
 
 import std;
@@ -13,8 +13,8 @@ import :ucd;
 
 export namespace alef {
 
-// The Grapheme_Cluster_Break property.
-enum class grapheme_break_property : std::uint8_t {
+// The Grapheme_Cluster_Break property, and a code point's value of it.
+enum class grapheme_cluster_break : std::uint8_t {
   other,
   cr,
   lf,
@@ -32,7 +32,7 @@ enum class grapheme_break_property : std::uint8_t {
 };
 
 // The Indic_Conjunct_Break property.
-enum class conjunct_break_property : std::uint8_t {
+enum class indic_conjunct_break : std::uint8_t {
   none,
   linker,
   consonant,
@@ -69,12 +69,12 @@ constexpr ucd::file derived_core_file{derived_core_bytes,
                                       sizeof derived_core_bytes};
 constexpr ucd::file emoji_file{emoji_bytes, sizeof emoji_bytes};
 
-constexpr std::optional<grapheme_break_property> grapheme_break_of(
+constexpr std::optional<grapheme_cluster_break> grapheme_break_of(
     const ucd::line& one) {
-  using enum grapheme_break_property;
+  using enum grapheme_cluster_break;
   if (one.count != 1)
     return std::nullopt;
-  constexpr std::pair<std::string_view, grapheme_break_property> names[] = {
+  constexpr std::pair<std::string_view, grapheme_cluster_break> names[] = {
       {"CR", cr},
       {"LF", lf},
       {"Control", control},
@@ -95,9 +95,9 @@ constexpr std::optional<grapheme_break_property> grapheme_break_of(
   return std::nullopt;
 }
 
-constexpr std::optional<conjunct_break_property> conjunct_break_of(
+constexpr std::optional<indic_conjunct_break> conjunct_break_of(
     const ucd::line& one) {
-  using enum conjunct_break_property;
+  using enum indic_conjunct_break;
   if (one.count != 2 || one.fields[0] != "InCB")
     return std::nullopt;
   if (one.fields[1] == "Linker")
@@ -118,10 +118,10 @@ constexpr std::optional<bool> pictographic_of(const ucd::line& one) {
 // The tables themselves, as values: evaluated once, where this interface is
 // compiled, and read from it by whoever imports it.
 constexpr auto grapheme_break =
-    ucd::property<grapheme_break_property, grapheme_break_file,
+    ucd::property<grapheme_cluster_break, grapheme_break_file,
                   &grapheme_break_of>;
 constexpr auto conjunct_break =
-    ucd::property<conjunct_break_property, derived_core_file,
+    ucd::property<indic_conjunct_break, derived_core_file,
                   &conjunct_break_of>;
 constexpr auto pictographic =
     ucd::property<bool, emoji_file, &pictographic_of>;
@@ -130,67 +130,79 @@ constexpr auto pictographic =
 
 export namespace alef {
 
-constexpr grapheme_break_property grapheme_break(char32_t code_point) noexcept {
+constexpr grapheme_cluster_break grapheme_cluster_break_of(
+    char32_t code_point) noexcept {
   // ASCII as the file says it: controls, CR, LF, and nothing else but Other.
   if (code_point < 0x80) {
     if (code_point == U'\r')
-      return grapheme_break_property::cr;
+      return grapheme_cluster_break::cr;
     if (code_point == U'\n')
-      return grapheme_break_property::lf;
+      return grapheme_cluster_break::lf;
     if (code_point < 0x20 || code_point == 0x7F)
-      return grapheme_break_property::control;
-    return grapheme_break_property::other;
+      return grapheme_cluster_break::control;
+    return grapheme_cluster_break::other;
   }
   return ucd::lookup(tables::grapheme_break, code_point,
-                     grapheme_break_property::other);
+                     grapheme_cluster_break::other);
 }
 
-constexpr conjunct_break_property conjunct_break(char32_t code_point) noexcept {
+constexpr indic_conjunct_break indic_conjunct_break_of(
+    char32_t code_point) noexcept {
   return ucd::lookup(tables::conjunct_break, code_point,
-                     conjunct_break_property::none);
+                     indic_conjunct_break::none);
 }
 
-constexpr bool extended_pictographic(char32_t code_point) noexcept {
+constexpr bool is_extended_pictographic(char32_t code_point) noexcept {
   return ucd::lookup(tables::pictographic, code_point, false);
 }
 
-// The end of the grapheme cluster that begins at `from`, which is a
-// boundary: the next boundary after it, or the end of the text.
+}  // namespace alef
+
+namespace alef::detail {
+
+constexpr bool is_control(grapheme_cluster_break one) noexcept {
+  using enum grapheme_cluster_break;
+  return one == control || one == cr || one == lf;
+}
+
+// The end of the cluster that begins at `from`, a boundary: the next boundary
+// after it, or the end of the text. Read forwards, carrying what the rules
+// ask of the text before a boundary instead of looking back for it.
 template <utf8_char Char>
-constexpr std::size_t next_grapheme_boundary(std::basic_string_view<Char> text,
-                                             std::size_t from) noexcept {
-  using enum grapheme_break_property;
+constexpr std::size_t next_boundary(std::basic_string_view<Char> text,
+                                    std::size_t from) noexcept {
+  using enum grapheme_cluster_break;
   if (from >= text.size())
     return text.size();
-  const decoded first = alef::decode<Char>(text.substr(from));
-  grapheme_break_property before = grapheme_break(first.code_point);
-  // What the rules ask of the text before a boundary, carried along instead
-  // of looked back for. Each describes the text that ends at `before`.
+  const decoded first = decode_front(text.substr(from));
+  grapheme_cluster_break before = grapheme_cluster_break_of(first.code_point);
+  // Each describes the text that ends at `before`.
   //
   // Regional indicators in a row (GB12, GB13): counted from `from`, which is
   // a boundary, and so after an even number of them.
   std::size_t indicators = before == regional_indicator ? 1 : 0;
-  // Extended_Pictographic Extend* (GB11), and then a ZWJ after it.
-  bool pictographic = extended_pictographic(first.code_point);
+  // Extended_Pictographic Extend* (GB11), and a ZWJ after it.
+  bool pictographic = is_extended_pictographic(first.code_point);
   bool pictographic_zwj = false;
   // InCB=Linker InCB=Extend* (GB9c).
-  bool linker = conjunct_break(first.code_point) == conjunct_break_property::linker;
+  bool linker = indic_conjunct_break_of(first.code_point) ==
+                indic_conjunct_break::linker;
 
   std::size_t at = from + first.length;
   while (at < text.size()) {
-    const decoded next = alef::decode<Char>(text.substr(at));
-    const grapheme_break_property after = grapheme_break(next.code_point);
-    const conjunct_break_property conjunct = conjunct_break(next.code_point);
-    const bool next_pictographic = extended_pictographic(next.code_point);
-    const auto is_control = [](grapheme_break_property one) {
-      return one == control || one == cr || one == lf;
-    };
+    const decoded next = decode_front(text.substr(at));
+    const grapheme_cluster_break after =
+        grapheme_cluster_break_of(next.code_point);
+    const indic_conjunct_break conjunct =
+        indic_conjunct_break_of(next.code_point);
+    const bool next_pictographic = is_extended_pictographic(next.code_point);
     bool joined = false;
     if (before == cr && after == lf)
       joined = true;  // GB3
     else if (is_control(before) || is_control(after))
       joined = false;  // GB4, GB5
-    else if (before == l && (after == l || after == v || after == lv || after == lvt))
+    else if (before == l &&
+             (after == l || after == v || after == lv || after == lvt))
       joined = true;  // GB6
     else if ((before == lv || before == v) && (after == v || after == t))
       joined = true;  // GB7
@@ -200,36 +212,147 @@ constexpr std::size_t next_grapheme_boundary(std::basic_string_view<Char> text,
       joined = true;  // GB9, GB9a
     else if (before == prepend)
       joined = true;  // GB9b
-    else if (linker && conjunct == conjunct_break_property::consonant)
+    else if (linker && conjunct == indic_conjunct_break::consonant)
       joined = true;  // GB9c
     else if (pictographic_zwj && next_pictographic)
       joined = true;  // GB11
     else if (before == regional_indicator && after == regional_indicator)
       joined = indicators % 2 == 1;  // GB12, GB13
     if (!joined)
-      return at;  // GB999 where nothing above joined them
+      return at;  // GB999, where nothing above joined them
 
     indicators = after == regional_indicator ? indicators + 1 : 0;
     pictographic_zwj = pictographic && after == zwj;
     pictographic = next_pictographic || (pictographic && after == extend);
-    linker = conjunct == conjunct_break_property::linker ||
-             (linker && conjunct == conjunct_break_property::extend);
+    linker = conjunct == indic_conjunct_break::linker ||
+             (linker && conjunct == indic_conjunct_break::extend);
     before = after;
     at += next.length;
   }
   return text.size();
 }
 
-constexpr std::size_t next_grapheme_boundary(std::string_view text,
-                                             std::size_t from) noexcept {
-  return alef::next_grapheme_boundary<char>(text, from);
-}
-constexpr std::size_t next_grapheme_boundary(std::u8string_view text,
-                                             std::size_t from) noexcept {
-  return alef::next_grapheme_boundary<char8_t>(text, from);
+// Whether there is a boundary at `at`, where a code point begins, inside the
+// text. Decided between the code points on either side of it, looking back
+// only as far as a rule asks.
+template <utf8_char Char>
+constexpr bool boundary_at(std::basic_string_view<Char> text,
+                           std::size_t at) noexcept {
+  using enum grapheme_cluster_break;
+  const auto code_point = [&](std::size_t where) {
+    return decode_front(text.substr(where)).code_point;
+  };
+  const std::size_t start = previous_start(text, at);
+  const char32_t first = code_point(start);
+  const char32_t second = code_point(at);
+  const grapheme_cluster_break before = grapheme_cluster_break_of(first);
+  const grapheme_cluster_break after = grapheme_cluster_break_of(second);
+  if (before == cr && after == lf)
+    return false;  // GB3
+  if (is_control(before) || is_control(after))
+    return true;  // GB4, GB5
+  if (before == l && (after == l || after == v || after == lv || after == lvt))
+    return false;  // GB6
+  if ((before == lv || before == v) && (after == v || after == t))
+    return false;  // GB7
+  if ((before == lvt || before == t) && after == t)
+    return false;  // GB8
+  if (after == extend || after == zwj || after == spacing_mark)
+    return false;  // GB9, GB9a
+  if (before == prepend)
+    return false;  // GB9b
+  // GB9c: InCB=Linker InCB=Extend* x InCB=Consonant.
+  if (indic_conjunct_break_of(second) == indic_conjunct_break::consonant) {
+    std::size_t where = start;
+    for (;;) {
+      const indic_conjunct_break conjunct =
+          indic_conjunct_break_of(code_point(where));
+      if (conjunct == indic_conjunct_break::linker)
+        return false;
+      if (conjunct != indic_conjunct_break::extend || where == 0)
+        break;
+      where = previous_start(text, where);
+    }
+  }
+  // GB11: Extended_Pictographic Extend* ZWJ x Extended_Pictographic.
+  if (before == zwj && is_extended_pictographic(second)) {
+    for (std::size_t where = start; where > 0;) {
+      where = previous_start(text, where);
+      const char32_t one = code_point(where);
+      if (is_extended_pictographic(one))
+        return false;
+      if (grapheme_cluster_break_of(one) != extend)
+        break;
+    }
+  }
+  // GB12, GB13: no break inside a pair of regional indicators, counted back
+  // to whatever is not one.
+  if (before == regional_indicator && after == regional_indicator) {
+    std::size_t indicators = 1;
+    for (std::size_t where = start; where > 0;) {
+      where = previous_start(text, where);
+      if (grapheme_cluster_break_of(code_point(where)) != regional_indicator)
+        break;
+      ++indicators;
+    }
+    return indicators % 2 == 0;
+  }
+  return true;  // GB999
 }
 
-// The grapheme clusters of some UTF-8, each a piece of the text it was given.
+// The start of the cluster that ends at `from`, a boundary.
+template <utf8_char Char>
+constexpr std::size_t previous_boundary(std::basic_string_view<Char> text,
+                                        std::size_t from) noexcept {
+  if (from > text.size())
+    from = text.size();
+  if (from == 0)
+    return 0;
+  std::size_t at = previous_start(text, from);
+  while (at > 0 && !boundary_at(text, at))
+    at = previous_start(text, at);
+  return at;
+}
+
+template <utf8_char Char>
+constexpr bool is_boundary(std::basic_string_view<Char> text,
+                           std::size_t at) noexcept {
+  if (at == 0 || at == text.size())
+    return true;  // GB1, GB2
+  if (at > text.size() || !code_point_starts(text, at))
+    return false;
+  return boundary_at(text, at);
+}
+
+}  // namespace alef::detail
+
+export namespace alef {
+
+// The next grapheme cluster boundary after `from`, which is one: the end of
+// the cluster that begins there.
+template <utf8_text Text>
+constexpr std::size_t next_grapheme_boundary(Text&& text,
+                                             std::size_t from) noexcept {
+  return detail::next_boundary(alef::as_utf8(text), from);
+}
+
+// The boundary before `from`, which is one: the start of the cluster that
+// ends there.
+template <utf8_text Text>
+constexpr std::size_t prev_grapheme_boundary(Text&& text,
+                                             std::size_t from) noexcept {
+  return detail::previous_boundary(alef::as_utf8(text), from);
+}
+
+// Whether a grapheme cluster boundary is at byte `at` of `text`: never inside
+// a code point, always at either end.
+template <utf8_text Text>
+constexpr bool is_grapheme_boundary(Text&& text, std::size_t at) noexcept {
+  return detail::is_boundary(alef::as_utf8(text), at);
+}
+
+// The grapheme clusters of some UTF-8, each a piece of the text it was given,
+// in either direction.
 template <utf8_char Char>
 class grapheme_view : public std::ranges::view_interface<grapheme_view<Char>> {
  public:
@@ -237,7 +360,7 @@ class grapheme_view : public std::ranges::view_interface<grapheme_view<Char>> {
    public:
     using value_type = std::basic_string_view<Char>;
     using difference_type = std::ptrdiff_t;
-    using iterator_concept = std::forward_iterator_tag;
+    using iterator_concept = std::bidirectional_iterator_tag;
 
     constexpr iterator() = default;
 
@@ -247,12 +370,22 @@ class grapheme_view : public std::ranges::view_interface<grapheme_view<Char>> {
 
     constexpr iterator& operator++() noexcept {
       begin_ = end_;
-      end_ = alef::next_grapheme_boundary<Char>(text_, begin_);
+      end_ = detail::next_boundary(text_, begin_);
       return *this;
     }
     constexpr iterator operator++(int) noexcept {
       iterator was = *this;
       ++*this;
+      return was;
+    }
+    constexpr iterator& operator--() noexcept {
+      end_ = begin_;
+      begin_ = detail::previous_boundary(text_, begin_);
+      return *this;
+    }
+    constexpr iterator operator--(int) noexcept {
+      iterator was = *this;
+      --*this;
       return was;
     }
 
@@ -269,8 +402,11 @@ class grapheme_view : public std::ranges::view_interface<grapheme_view<Char>> {
    private:
     friend grapheme_view;
 
-    constexpr explicit iterator(std::basic_string_view<Char> text) noexcept
-        : text_(text), end_(alef::next_grapheme_boundary<Char>(text, 0)) {}
+    constexpr iterator(std::basic_string_view<Char> text,
+                       std::size_t begin) noexcept
+        : text_(text),
+          begin_(begin),
+          end_(detail::next_boundary(text, begin)) {}
 
     std::basic_string_view<Char> text_;
     std::size_t begin_ = 0;
@@ -281,19 +417,25 @@ class grapheme_view : public std::ranges::view_interface<grapheme_view<Char>> {
   constexpr explicit grapheme_view(std::basic_string_view<Char> text) noexcept
       : text_(text) {}
 
-  constexpr iterator begin() const noexcept { return iterator(text_); }
-  constexpr std::default_sentinel_t end() const noexcept { return {}; }
+  constexpr iterator begin() const noexcept { return iterator(text_, 0); }
+  constexpr iterator end() const noexcept {
+    return iterator(text_, text_.size());
+  }
 
  private:
   std::basic_string_view<Char> text_;
 };
 
-constexpr grapheme_view<char> graphemes(std::string_view text) noexcept {
-  return grapheme_view<char>(text);
-}
-constexpr grapheme_view<char8_t> graphemes(std::u8string_view text) noexcept {
-  return grapheme_view<char8_t>(text);
-}
+// graphemes(text), or text | graphemes.
+struct graphemes_fn : std::ranges::range_adaptor_closure<graphemes_fn> {
+  template <utf8_text Text>
+    requires detail::lasting<Text>
+  constexpr auto operator()(Text&& text) const noexcept {
+    const auto bytes = alef::as_utf8(text);
+    return grapheme_view<typename decltype(bytes)::value_type>(bytes);
+  }
+};
+inline constexpr graphemes_fn graphemes{};
 
 }  // namespace alef
 

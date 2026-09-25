@@ -11,14 +11,21 @@ version of Unicode is new files in `ucd/`.
 ## What there is
 
 - **UTF-8.** `alef::decode`, `alef::encode`, `alef::is_well_formed`, and
-  `alef::code_points(text)`, a view of the code points of some UTF-8. Bytes
-  that are not UTF-8 read as U+FFFD, one for each maximal subpart of an
-  ill-formed sequence.
-- **Grapheme clusters** (UAX #29, extended): `alef::graphemes(text)`, a view
-  whose elements are pieces of the text it was given,
-  `alef::next_grapheme_boundary`, and the properties the rules are decided by:
-  `grapheme_break`, `conjunct_break`, `extended_pictographic`. Checked against
-  every line of `GraphemeBreakTest.txt`.
+  `alef::code_points`, a bidirectional view of the code points of some UTF-8.
+  Bytes that are not UTF-8 read as U+FFFD, one for each maximal subpart of an
+  ill-formed sequence, and they come apart at the same places read backwards.
+- **Grapheme clusters** (UAX #29, extended): `alef::graphemes`, a
+  bidirectional view whose elements are pieces of the text it was given;
+  `alef::next_grapheme_boundary`, `alef::prev_grapheme_boundary` and
+  `alef::is_grapheme_boundary`; and the properties the rules are decided by,
+  `alef::grapheme_cluster_break_of`, `alef::indic_conjunct_break_of` and
+  `alef::is_extended_pictographic`. Checked against every line of
+  `GraphemeBreakTest.txt`, forwards, backwards and at every byte.
+
+Text is anything UTF-8 can be read from (`alef::utf8_text`): a string or a
+view of one, a string literal, a pointer to a NUL-terminated string, or a
+contiguous range of `char` or `char8_t`. The views take it by call or by
+pipe, and refuse a temporary string, whose bytes they would outlive.
 
 All of it is constexpr, in the module and wherever it is imported.
 
@@ -26,9 +33,11 @@ All of it is constexpr, in the module and wherever it is imported.
 import std;
 import alef;
 
-static_assert(std::ranges::distance(alef::graphemes(u8"e\u0301🧑‍💻क्ष")) == 3);
+static_assert(std::ranges::distance(u8"e\u0301🧑‍💻क्ष" | alef::graphemes) == 3);
 
 for (std::string_view cluster : alef::graphemes(text))
+  ...
+for (std::string_view cluster : text | alef::graphemes | std::views::reverse)
   ...
 ```
 
