@@ -49,9 +49,9 @@ later. All of it is constexpr.
   same text in UTF-16 and UTF-32 comes apart into the same clusters.
 
 `import alef;` is all of it, and each part is a module of its own as well --
-`alef.utf`, `alef.grapheme`, `alef.word`, `alef.sentence`, `alef.identifier`, `alef.normalization`,
+`alef.utf`, `alef.grapheme`, `alef.word`, `alef.sentence`, `alef.identifier`, `alef.caseless`, `alef.normalization`,
 `alef.properties`, `alef.casing`, `alef.line`, `alef.bidi` -- with a CMake
-target of its own: `alef::utf`, `alef::grapheme`, `alef::word`, `alef::sentence`, `alef::identifier`,
+target of its own: `alef::utf`, `alef::grapheme`, `alef::word`, `alef::sentence`, `alef::identifier`, `alef::caseless`,
 `alef::normalization`, `alef::properties`, `alef::casing`, `alef::line`,
 `alef::bidi`, and `alef::alef` for all. Each table is a module of its own
 too, importing nothing of the library but the reader of the UCD, so a
@@ -102,6 +102,14 @@ change to the library does not compile a table again.
   text, and `alef::to_lower` and the others map one code point to one.
   Checked against every simple mapping of UnicodeData.txt, every folding of
   CaseFolding.txt and every unconditional mapping of SpecialCasing.txt.
+- **Caseless matching** (the Unicode Standard, D145 and D146).
+  `alef::equivalent_ignoring_case(a, b)` compares texts in any UTFs ignoring
+  case and canonical differences -- `e` and a combining acute match `É` --
+  and `alef::compatible_ignoring_case(a, b)` compatibility differences too:
+  a circled 1 matches 1, a full-width letter the letter. Their keys are
+  lazy views, `text | alef::as_canonical_caseless` and
+  `text | alef::as_compatibility_caseless`, for hashing and lookup; a
+  `casing_language` asks for Turkic folding.
 - **Line breaking** (UAX #14). `text | alef::line_breaks` gives the pieces
   of text in any UTF between the places a line may end, each with the spaces
   after it and whether a line has to end there -- after a line feed and the

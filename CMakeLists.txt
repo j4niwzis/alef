@@ -68,9 +68,10 @@ alef_module(alef_properties src/properties.cc alef_utf alef_grapheme
   alef_tables_width)
 alef_module(alef_casing src/casing.cc alef_utf alef_word alef_tables_casing
   alef_tables_normalization)
+alef_module(alef_caseless src/caseless.cc alef_utf alef_casing alef_normalization)
 alef_module(alef_line src/line.cc alef_utf alef_tables_line)
 alef_module(alef_bidi src/bidi.cc alef_utf alef_tables_bidi)
-alef_module(alef src/alef.cc alef_utf alef_grapheme alef_normalization alef_word alef_sentence alef_identifier
+alef_module(alef src/alef.cc alef_utf alef_grapheme alef_normalization alef_word alef_sentence alef_identifier alef_caseless
   alef_properties alef_casing alef_line alef_bidi)
 
 add_library(alef::alef ALIAS alef)
@@ -80,6 +81,7 @@ add_library(alef::normalization ALIAS alef_normalization)
 add_library(alef::word ALIAS alef_word)
 add_library(alef::sentence ALIAS alef_sentence)
 add_library(alef::identifier ALIAS alef_identifier)
+add_library(alef::caseless ALIAS alef_caseless)
 add_library(alef::properties ALIAS alef_properties)
 add_library(alef::casing ALIAS alef_casing)
 add_library(alef::line ALIAS alef_line)
