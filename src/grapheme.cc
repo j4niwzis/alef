@@ -5,311 +5,34 @@
 // from the Unicode Character Database of the same version:
 // Grapheme_Cluster_Break from GraphemeBreakProperty.txt, Indic_Conjunct_Break
 // from DerivedCoreProperties.txt, Extended_Pictographic from emoji-data.txt.
-export module alef:grapheme;
+export module alef.grapheme;
 
 import std;
-import :utf;
-import :ucd;
+import alef.utf;
+import alef.tables.grapheme;
 
+// The properties, which the table of them -- a module of its own -- defines.
 export namespace alef {
 
-// The Grapheme_Cluster_Break property, and a code point's value of it.
-enum class grapheme_cluster_break : std::uint8_t {
-  other,
-  cr,
-  lf,
-  control,
-  extend,
-  zwj,
-  regional_indicator,
-  prepend,
-  spacing_mark,
-  l,
-  v,
-  t,
-  lv,
-  lvt,
-};
-
-// The Indic_Conjunct_Break property.
-enum class indic_conjunct_break : std::uint8_t {
-  none,
-  linker,
-  consonant,
-  extend,
-};
+using alef::grapheme_cluster_break;
+using alef::indic_conjunct_break;
 
 }  // namespace alef
-
-namespace alef::tables {
-
-// #embed is C23, and in C++ an extension until C++26 has it. Said here rather
-// than with a flag, so that whoever compiles this interface -- an importer of
-// an installed alef among them -- needs no flag to do it quietly.
-#if defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wc23-extensions"
-#endif
-constexpr char grapheme_break_bytes[] = {
-#embed "../ucd/auxiliary/GraphemeBreakProperty.txt"
-};
-constexpr char derived_core_bytes[] = {
-#embed "../ucd/DerivedCoreProperties.txt"
-};
-constexpr char emoji_bytes[] = {
-#embed "../ucd/emoji/emoji-data.txt"
-};
-#if defined(__clang__)
-#pragma clang diagnostic pop
-#endif
-
-constexpr ucd::file grapheme_break_file{grapheme_break_bytes,
-                                        sizeof grapheme_break_bytes};
-constexpr ucd::file derived_core_file{derived_core_bytes,
-                                      sizeof derived_core_bytes};
-constexpr ucd::file emoji_file{emoji_bytes, sizeof emoji_bytes};
-
-constexpr std::optional<grapheme_cluster_break> grapheme_break_of(
-    const ucd::line& one) {
-  using enum grapheme_cluster_break;
-  if (one.count != 1)
-    return std::nullopt;
-  constexpr std::pair<std::string_view, grapheme_cluster_break> names[] = {
-      {"CR", cr},
-      {"LF", lf},
-      {"Control", control},
-      {"Extend", extend},
-      {"ZWJ", zwj},
-      {"Regional_Indicator", regional_indicator},
-      {"Prepend", prepend},
-      {"SpacingMark", spacing_mark},
-      {"L", l},
-      {"V", v},
-      {"T", t},
-      {"LV", lv},
-      {"LVT", lvt},
-  };
-  for (const auto& [name, value] : names)
-    if (one.fields[0] == name)
-      return value;
-  return std::nullopt;
-}
-
-constexpr std::optional<indic_conjunct_break> conjunct_break_of(
-    const ucd::line& one) {
-  using enum indic_conjunct_break;
-  if (one.count != 2 || one.fields[0] != "InCB")
-    return std::nullopt;
-  if (one.fields[1] == "Linker")
-    return linker;
-  if (one.fields[1] == "Consonant")
-    return consonant;
-  if (one.fields[1] == "Extend")
-    return extend;
-  return std::nullopt;
-}
-
-constexpr std::optional<bool> pictographic_of(const ucd::line& one) {
-  if (one.count != 1 || one.fields[0] != "Extended_Pictographic")
-    return std::nullopt;
-  return true;
-}
-
-// The tables themselves, as values: evaluated once, where this interface is
-// compiled, and read from it by whoever imports it.
-constexpr auto grapheme_break =
-    ucd::property<grapheme_cluster_break, grapheme_break_file,
-                  &grapheme_break_of>;
-constexpr auto conjunct_break =
-    ucd::property<indic_conjunct_break, derived_core_file,
-                  &conjunct_break_of>;
-constexpr auto pictographic =
-    ucd::property<bool, emoji_file, &pictographic_of>;
-
-// All the rules ask of a code point, in one byte: Grapheme_Cluster_Break in
-// the low four bits, Indic_Conjunct_Break in the two above them, and whether
-// it is Extended_Pictographic in the one above those. Zero is Other, None,
-// and not.
-struct packed {
-  std::uint8_t bits = 0;
-
-  constexpr grapheme_cluster_break grapheme_break() const noexcept {
-    return static_cast<grapheme_cluster_break>(bits & 0x0F);
-  }
-  constexpr indic_conjunct_break conjunct_break() const noexcept {
-    return static_cast<indic_conjunct_break>((bits >> 4) & 0x03);
-  }
-  constexpr bool pictographic() const noexcept { return (bits & 0x40) != 0; }
-};
-
-constexpr std::uint8_t pack(grapheme_cluster_break grapheme,
-                            indic_conjunct_break conjunct,
-                            bool is_pictographic) noexcept {
-  return static_cast<std::uint8_t>(static_cast<unsigned>(grapheme) |
-                                   static_cast<unsigned>(conjunct) << 4 |
-                                   (is_pictographic ? 0x40u : 0u));
-}
-
-// The three merged: runs of code points with the same byte, in order, where
-// it is not zero. A run ends wherever a range of any of the three begins or
-// ends, and runs of the same byte side by side are one.
-struct run {
-  char32_t first = 0;
-  char32_t last = 0;
-  std::uint8_t bits = 0;
-};
-
-constexpr std::vector<run> runs() {
-  std::vector<run> out;
-  // Where each of the three is: the first of its ranges that does not end
-  // before the code point. They are walked side by side, once.
-  std::size_t in_break = 0;
-  std::size_t in_conjunct = 0;
-  std::size_t in_pictographic = 0;
-  for (char32_t code_point = 0; code_point <= 0x10FFFF;) {
-    // Where the next of the three may change.
-    char32_t next = 0x110000;
-    const auto value = [&](const auto& ranges, std::size_t& index,
-                           auto otherwise) {
-      while (index < ranges.size() && ranges[index].last < code_point)
-        ++index;
-      if (index == ranges.size())
-        return otherwise;
-      if (ranges[index].first > code_point) {
-        next = std::min(next, ranges[index].first);
-        return otherwise;
-      }
-      next = std::min(next, static_cast<char32_t>(ranges[index].last + 1));
-      return ranges[index].value;
-    };
-    const std::uint8_t bits = pack(
-        value(grapheme_break, in_break, grapheme_cluster_break::other),
-        value(conjunct_break, in_conjunct, indic_conjunct_break::none),
-        value(pictographic, in_pictographic, false));
-    const auto last = static_cast<char32_t>(next - 1);
-    if (bits != 0) {
-      if (!out.empty() && out.back().last + 1 == code_point &&
-          out.back().bits == bits)
-        out.back().last = last;
-      else
-        out.push_back({code_point, last, bits});
-    }
-    code_point = next;
-  }
-  return out;
-}
-
-// A table of two stages, which is what makes a code point's properties two
-// reads and no search: Unicode in blocks of 256 code points, each block the
-// index of the block of bytes it is the same as, and those blocks, each kept
-// once. For Unicode 18.0.0, 111 of them are all 4352 blocks of it.
-inline constexpr std::size_t block_size = 256;
-inline constexpr std::size_t block_count = 0x110000 / block_size;
-
-struct layout {
-  std::vector<std::size_t> index;
-  std::vector<std::uint8_t> blocks;
-};
-
-constexpr layout lay_out() {
-  const std::vector<run> all = runs();
-  layout out;
-  out.index.reserve(block_count);
-  // A sum of each block kept, so that few are compared in full; and the
-  // block that is all of one byte, for each byte one is all of.
-  std::vector<std::uint32_t> sums;
-  std::array<std::size_t, 256> all_of{};
-  all_of.fill(block_count);
-  std::array<std::uint8_t, block_size> bytes{};
-  const auto keep = [&] {
-    std::uint32_t sum = 0;
-    for (const std::uint8_t byte : bytes)
-      sum = sum * 31 + byte;
-    for (std::size_t kept = 0; kept < sums.size(); ++kept)
-      if (sums[kept] == sum &&
-          std::ranges::equal(bytes, std::span(out.blocks)
-                                        .subspan(kept * block_size, block_size)))
-        return kept;
-    sums.push_back(sum);
-    out.blocks.insert(out.blocks.end(), bytes.begin(), bytes.end());
-    return sums.size() - 1;
-  };
-  std::size_t at = 0;  // the first run that does not end before the block
-  for (std::size_t block = 0; block < block_count; ++block) {
-    const auto start = static_cast<char32_t>(block * block_size);
-    const auto end = static_cast<char32_t>(start + block_size - 1);
-    while (at < all.size() && all[at].last < start)
-      ++at;
-    // All of one byte: no run in it, or one run over all of it -- which is
-    // most of Unicode, and is not written out to be found so.
-    std::optional<std::uint8_t> same;
-    if (at == all.size() || all[at].first > end)
-      same = 0;
-    else if (all[at].first <= start && all[at].last >= end)
-      same = all[at].bits;
-    if (same) {
-      if (all_of[*same] == block_count) {
-        bytes.fill(*same);
-        all_of[*same] = keep();
-      }
-      out.index.push_back(all_of[*same]);
-      continue;
-    }
-    bytes.fill(0);
-    for (std::size_t one = at; one < all.size() && all[one].first <= end; ++one)
-      for (char32_t code_point = std::max(all[one].first, start);
-           code_point <= std::min(all[one].last, end); ++code_point)
-        bytes[code_point - start] = all[one].bits;
-    out.index.push_back(keep());
-  }
-  return out;
-}
-
-inline constexpr std::size_t distinct_blocks =
-    lay_out().blocks.size() / block_size;
-static_assert(distinct_blocks <= 65536);
-
-using block_index =
-    std::conditional_t<(distinct_blocks <= 256), std::uint8_t, std::uint16_t>;
-
-struct two_stages {
-  std::array<block_index, block_count> index;
-  std::array<std::uint8_t, distinct_blocks * block_size> bytes;
-};
-
-inline constexpr two_stages table = [] {
-  const layout laid = lay_out();
-  two_stages out{};
-  for (std::size_t block = 0; block < block_count; ++block)
-    out.index[block] = static_cast<block_index>(laid.index[block]);
-  std::ranges::copy(laid.blocks, out.bytes.begin());
-  return out;
-}();
-
-constexpr packed properties_of(char32_t code_point) noexcept {
-  if (code_point > 0x10FFFF)
-    return {};
-  return {table.bytes[std::size_t{table.index[code_point / block_size]} *
-                          block_size +
-                      code_point % block_size]};
-}
-
-}  // namespace alef::tables
 
 export namespace alef {
 
 constexpr grapheme_cluster_break grapheme_cluster_break_of(
     char32_t code_point) noexcept {
-  return tables::properties_of(code_point).grapheme_break();
+  return tables::grapheme_properties_of(code_point).grapheme_break();
 }
 
 constexpr indic_conjunct_break indic_conjunct_break_of(
     char32_t code_point) noexcept {
-  return tables::properties_of(code_point).conjunct_break();
+  return tables::grapheme_properties_of(code_point).conjunct_break();
 }
 
 constexpr bool is_extended_pictographic(char32_t code_point) noexcept {
-  return tables::properties_of(code_point).pictographic();
+  return tables::grapheme_properties_of(code_point).pictographic();
 }
 
 }  // namespace alef
@@ -320,31 +43,6 @@ constexpr bool is_control(grapheme_cluster_break one) noexcept {
   using enum grapheme_cluster_break;
   return one == control || one == cr || one == lf;
 }
-
-// An optional that is not copied or moved with what holds it, as the
-// standard's non-propagating-cache: a view over text that can be read only
-// once keeps its place in the text, and a copy of the view is not there.
-template <class T>
-class non_propagating : public std::optional<T> {
- public:
-  constexpr non_propagating() noexcept = default;
-  constexpr non_propagating(const non_propagating&) noexcept
-      : std::optional<T>() {}
-  constexpr non_propagating(non_propagating&& other) noexcept
-      : std::optional<T>() {
-    other.reset();
-  }
-  constexpr non_propagating& operator=(const non_propagating& other) noexcept {
-    if (this != &other)
-      this->reset();
-    return *this;
-  }
-  constexpr non_propagating& operator=(non_propagating&& other) noexcept {
-    this->reset();
-    other.reset();
-    return *this;
-  }
-};
 
 // What the rules ask of a cluster so far, carried forward from where it
 // began instead of looked back for: enough to say whether the next code
@@ -358,7 +56,7 @@ class cluster_rules {
   // before a boundary are an even number of them, and neither GB9c nor GB11
   // reaches back past one.
   constexpr explicit cluster_rules(char32_t first) noexcept
-      : cluster_rules(tables::properties_of(first)) {}
+      : cluster_rules(tables::grapheme_properties_of(first)) {}
 
   // Whether `next` goes on with the cluster, which takes it in if it does.
   constexpr bool joins(char32_t next) noexcept {
@@ -375,7 +73,7 @@ class cluster_rules {
       odd_indicators_ = pictographic_ = pictographic_zwj_ = linker_ = false;
       return true;
     }
-    const tables::packed properties = tables::properties_of(next);
+    const tables::grapheme_properties properties = tables::grapheme_properties_of(next);
     const grapheme_cluster_break after = properties.grapheme_break();
     const indic_conjunct_break conjunct = properties.conjunct_break();
     const bool next_pictographic = properties.pictographic();
@@ -415,7 +113,7 @@ class cluster_rules {
 
  private:
   // One code point's properties, read once for all three.
-  constexpr explicit cluster_rules(tables::packed first) noexcept
+  constexpr explicit cluster_rules(tables::grapheme_properties first) noexcept
       : before_(first.grapheme_break()),
         odd_indicators_(before_ == grapheme_cluster_break::regional_indicator),
         pictographic_(first.pictographic()),
@@ -457,41 +155,6 @@ constexpr I next_boundary(I from, const S& last) {
   }
   return at;
 }
-
-// Text read once, a code point at a time: where the reading is, and the code
-// units of the code point read last, which in such text are all that is left
-// of them.
-template <class Unit, class I, class S>
-struct code_point_reader {
-  I next;
-  S last;
-  std::array<Unit, 4> units{};
-  std::uint8_t count = 0;
-
-  constexpr code_point_reader(I first, S end)
-      : next(std::move(first)), last(std::move(end)) {}
-
-  // The next code point, read into `units`; none at the end of the text.
-  constexpr std::optional<char32_t> read() {
-    count = 0;
-    if (next == last)
-      return std::nullopt;
-    bool well_formed = false;
-    return detail::read<Unit>(next, last, well_formed,
-                              [this](Unit unit) { units[count++] = unit; });
-  }
-};
-
-// An adaptor with an option said, as a closure: text | graphemes(owning<>).
-template <class Adaptor, class Option>
-struct with_option
-    : std::ranges::range_adaptor_closure<with_option<Adaptor, Option>> {
-  template <class Range>
-    requires std::invocable<const Adaptor&, Range, Option>
-  constexpr auto operator()(Range&& range) const {
-    return Adaptor{}(std::forward<Range>(range), Option{});
-  }
-};
 
 // Whether there is a boundary at `at`, where a code point begins, between
 // `first` and `bound`. Decided between the code points on either side of it,

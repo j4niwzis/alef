@@ -14,7 +14,7 @@
 // UTF-16, one for each unpaired surrogate; in UTF-32, one for each value that
 // is a surrogate or past U+10FFFF. Read backwards, text comes apart at the
 // same places it does forwards.
-export module alef:utf;
+export module alef.utf;
 
 import std;
 
@@ -41,7 +41,7 @@ concept utf_range =
 
 }  // namespace alef
 
-namespace alef::detail {
+export namespace alef::detail {
 
 template <class Range>
 using unit_of = std::remove_cv_t<std::ranges::range_value_t<Range>>;
@@ -285,6 +285,67 @@ constexpr auto all_of(Range&& range) {
 
 template <class Range>
 using all_of_t = decltype(all_of(std::declval<Range>()));
+
+
+// An optional that is not copied or moved with what holds it, as the
+// standard's non-propagating-cache: a view over text that can be read only
+// once keeps its place in the text, and a copy of the view is not there.
+template <class T>
+class non_propagating : public std::optional<T> {
+ public:
+  constexpr non_propagating() noexcept = default;
+  constexpr non_propagating(const non_propagating&) noexcept
+      : std::optional<T>() {}
+  constexpr non_propagating(non_propagating&& other) noexcept
+      : std::optional<T>() {
+    other.reset();
+  }
+  constexpr non_propagating& operator=(const non_propagating& other) noexcept {
+    if (this != &other)
+      this->reset();
+    return *this;
+  }
+  constexpr non_propagating& operator=(non_propagating&& other) noexcept {
+    this->reset();
+    other.reset();
+    return *this;
+  }
+};
+
+// Text read once, a code point at a time: where the reading is, and the code
+// units of the code point read last, which in such text are all that is left
+// of them.
+template <class Unit, class I, class S>
+struct code_point_reader {
+  I next;
+  S last;
+  std::array<Unit, 4> units{};
+  std::uint8_t count = 0;
+
+  constexpr code_point_reader(I first, S end)
+      : next(std::move(first)), last(std::move(end)) {}
+
+  // The next code point, read into `units`; none at the end of the text.
+  constexpr std::optional<char32_t> read() {
+    count = 0;
+    if (next == last)
+      return std::nullopt;
+    bool well_formed = false;
+    return detail::read<Unit>(next, last, well_formed,
+                              [this](Unit unit) { units[count++] = unit; });
+  }
+};
+
+// An adaptor with an option said, as a closure: text | graphemes(owning<>).
+template <class Adaptor, class Option>
+struct with_option
+    : std::ranges::range_adaptor_closure<with_option<Adaptor, Option>> {
+  template <class Range>
+    requires std::invocable<const Adaptor&, Range, Option>
+  constexpr auto operator()(Range&& range) const {
+    return Adaptor{}(std::forward<Range>(range), Option{});
+  }
+};
 
 }  // namespace alef::detail
 

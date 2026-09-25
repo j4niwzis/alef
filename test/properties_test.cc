@@ -8,30 +8,69 @@ import gtest;
 #include "gtest/gtest-macros.h"
 
 #include "constexpr_test.h"
+#include "data.h"
 
 namespace {
 
+#if defined(ALEF_CONSTEXPR_TESTS)
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wc23-extensions"
 #endif
-constexpr char grapheme_break_file[] = {
+constexpr char grapheme_break_property_bytes[] = {
 #embed "../ucd/auxiliary/GraphemeBreakProperty.txt"
 };
-constexpr char derived_core_file[] = {
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+constexpr std::string_view grapheme_break_property() {
+  return {grapheme_break_property_bytes, sizeof grapheme_break_property_bytes};
+}
+#else
+std::string_view grapheme_break_property() {
+  return alef::test::ucd_file("auxiliary/GraphemeBreakProperty.txt");
+}
+#endif
+
+#if defined(ALEF_CONSTEXPR_TESTS)
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc23-extensions"
+#endif
+constexpr char derived_core_properties_bytes[] = {
 #embed "../ucd/DerivedCoreProperties.txt"
 };
-constexpr char emoji_file[] = {
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+constexpr std::string_view derived_core_properties() {
+  return {derived_core_properties_bytes, sizeof derived_core_properties_bytes};
+}
+#else
+std::string_view derived_core_properties() {
+  return alef::test::ucd_file("DerivedCoreProperties.txt");
+}
+#endif
+
+#if defined(ALEF_CONSTEXPR_TESTS)
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc23-extensions"
+#endif
+constexpr char emoji_data_bytes[] = {
 #embed "../ucd/emoji/emoji-data.txt"
 };
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
-
-template <std::size_t Size>
-constexpr std::string_view text_of(const char (&bytes)[Size]) {
-  return {bytes, Size};
+constexpr std::string_view emoji_data() {
+  return {emoji_data_bytes, sizeof emoji_data_bytes};
 }
+#else
+std::string_view emoji_data() {
+  return alef::test::ucd_file("emoji/emoji-data.txt");
+}
+#endif
 
 constexpr std::string_view trimmed(std::string_view text) {
   const std::size_t first = text.find_first_not_of(" \t");
@@ -146,10 +185,10 @@ constexpr std::string hex_of(char32_t code_point) {
 // property begins and ends, and the code points on either side of that.
 CONSTEXPR_TEST(Properties, OfEveryCodePoint) {
   const auto grapheme_breaks = read<alef::grapheme_cluster_break>(
-      text_of(grapheme_break_file), grapheme_break);
+      grapheme_break_property(), grapheme_break);
   const auto conjunct_breaks = read<alef::indic_conjunct_break>(
-      text_of(derived_core_file), conjunct_break);
-  const auto pictographs = read<bool>(text_of(emoji_file), pictographic);
+      derived_core_properties(), conjunct_break);
+  const auto pictographs = read<bool>(emoji_data(), pictographic);
   CONSTEXPR_EXPECT_FALSE(grapheme_breaks.empty() || conjunct_breaks.empty() ||
                          pictographs.empty());
   std::string wrong;

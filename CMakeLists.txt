@@ -12,30 +12,46 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 project(alef VERSION 0.1 LANGUAGES CXX)
 
-add_library(alef)
+# One module to a target. A change to a module compiles it again, and what
+# imports it, and nothing else -- the tables least of all: each is a module of
+# its own that imports nothing of the library but alef.ucd, the reader of the
+# UCD, so a table is compiled again when its files or that reader change,
+# and not when the code that looks things up in it does.
+function(alef_module target file)
+  add_library(${target})
+  target_sources(${target}
+    PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES ${file})
+  target_compile_features(${target} PUBLIC cxx_std_23)
+  if(ARGN)
+    target_link_libraries(${target} PUBLIC ${ARGN})
+  endif()
+endfunction()
+
+alef_module(alef_ucd src/ucd.cc)
+alef_module(alef_tables_grapheme src/tables/grapheme.cc alef_ucd)
+alef_module(alef_utf src/utf.cc)
+alef_module(alef_grapheme src/grapheme.cc alef_utf alef_tables_grapheme)
+alef_module(alef src/alef.cc alef_utf alef_grapheme)
+
 add_library(alef::alef ALIAS alef)
-target_sources(alef
-  PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES
-    src/alef.cc
-    src/utf.cc
-    src/ucd.cc
-    src/grapheme.cc)
-target_compile_features(alef PUBLIC cxx_std_23)
+add_library(alef::utf ALIAS alef_utf)
+add_library(alef::grapheme ALIAS alef_grapheme)
 
 # Reading the UCD is constant evaluation over the whole of a file, far past
-# what a compiler lets one constant expression do by default: clang counts
-# about eighteen steps a byte, and its default is 1048576.
+# what a compiler lets one constant expression do by default: its default is
+# 1048576 steps in clang.
 #
-# PUBLIC, because with modules these interfaces are not compiled by this
-# target alone. CMake compiles them again for a target whose settings differ,
+# PUBLIC, because with modules these interfaces are not compiled by these
+# targets alone. CMake compiles them again for a target whose settings differ,
 # and a consumer of an installed alef compiles them itself -- in both cases
 # with the usage requirements of alef and not with its private options. So
 # what it takes to compile the interfaces is a usage requirement, the way an
 # include directory is. What a consumer's own code gets from it is a higher
-# ceiling and nothing else.
+# ceiling and nothing else. It is said on the reader, and everything that
+# reads the UCD links it.
 #
 # GCC is not given one yet: what it needs has not been measured.
-target_compile_options(alef PUBLIC
+target_compile_options(alef_ucd PUBLIC
   $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=100000000>)
 
 option(ALEF_TESTS "Build the tests" ${PROJECT_IS_TOP_LEVEL})

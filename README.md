@@ -48,6 +48,12 @@ later. All of it is constexpr.
   `GraphemeBreakTest.txt` forwards, backwards and at every byte, and the
   same text in UTF-16 and UTF-32 comes apart into the same clusters.
 
+`import alef;` is all of it, and each part is a module of its own as well --
+`alef.utf`, `alef.grapheme` -- with a CMake target of its own: `alef::utf`,
+`alef::grapheme`, and `alef::alef` for all. Each table is a module of its
+own too, importing nothing of the library but the reader of the UCD, so a
+change to the library does not compile a table again.
+
 Text is a string, a view of one, a string literal (without the NUL it ends
 in), or any other range of code units. A view made of a temporary string
 keeps it.

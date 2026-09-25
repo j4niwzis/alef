@@ -9,20 +9,30 @@ import gtest;
 #include "gtest/gtest-macros.h"
 
 #include "constexpr_test.h"
+#include "data.h"
 #include "once.h"
 
 namespace {
 
 // GraphemeBreakTest.txt, of the version the tables are read from.
+#if defined(ALEF_CONSTEXPR_TESTS)
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wc23-extensions"
 #endif
-constexpr char test_file[] = {
+constexpr char grapheme_break_test_bytes[] = {
 #embed "../ucd/auxiliary/GraphemeBreakTest.txt"
 };
 #if defined(__clang__)
 #pragma clang diagnostic pop
+#endif
+constexpr std::string_view grapheme_break_test() {
+  return {grapheme_break_test_bytes, sizeof grapheme_break_test_bytes};
+}
+#else
+std::string_view grapheme_break_test() {
+  return alef::test::ucd_file("auxiliary/GraphemeBreakTest.txt");
+}
 #endif
 
 // One line of it: the text as UTF-8, and where the boundaries are in it.
@@ -45,7 +55,7 @@ constexpr char32_t hex_value(std::string_view digits) {
 constexpr std::vector<example> examples() {
   constexpr std::string_view boundary = "\xC3\xB7";
   constexpr std::string_view none = "\xC3\x97";
-  const std::string_view file(test_file, sizeof test_file);
+  const std::string_view file = grapheme_break_test();
   std::vector<example> out;
   for (std::size_t start = 0; start < file.size();) {
     std::size_t end = file.find('\n', start);
@@ -197,7 +207,7 @@ struct numbers {
 // Every line that is not a comment begins with a boundary, and every one of
 // them is read.
 CONSTEXPR_TEST(GraphemeBreakTest, EveryLineIsRead) {
-  const std::string_view file(test_file, sizeof test_file);
+  const std::string_view file = grapheme_break_test();
   std::size_t lines = file.starts_with("\xC3\xB7") ? 1 : 0;
   for (std::size_t at = file.find("\n\xC3\xB7"); at != std::string_view::npos;
        at = file.find("\n\xC3\xB7", at + 1))

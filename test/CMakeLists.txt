@@ -43,6 +43,9 @@ foreach(one IN ITEMS utf grapheme properties)
   add_executable(alef-${one}-test ${one}_test.cc)
   target_link_libraries(alef-${one}-test PRIVATE alef ${alef_gtest})
   add_test(NAME ${one} COMMAND alef-${one}-test)
+  # Where a test that only runs reads the files of the UCD from.
+  target_compile_definitions(alef-${one}-test PRIVATE
+    "ALEF_UCD_DIR=\"${PROJECT_SOURCE_DIR}/ucd\"")
   if(NOT ALEF_CONSTEXPR_TESTS)
     continue()
   endif()
