@@ -123,6 +123,16 @@ change to the library does not compile a table again.
   for (auto paragraph : text | alef::paragraphs)
     lay_out(alef::bidi_paragraph(paragraph));
   ```
+  A line of a paragraph -- its ends where `alef::line_breaks` allows them --
+  is drawn by its runs: `paragraph.runs(first, last)`, `first` and `last`
+  code units of the paragraph's text, gives the line's `alef::bidi_run`s in
+  visual order, each code units at one level, right to left where the level
+  is odd:
+
+  ```cpp
+  for (alef::bidi_run run : paragraph.runs(line_first, line_last))
+    draw(text.substr(run.first, run.last - run.first), run.right_to_left());
+  ```
 - **Normalization** (UAX #15). `alef::as_nfc`, `alef::as_nfd`,
   `alef::as_nfkc` and `alef::as_nfkd` read text in any UTF and give it in the
   form as code points -- `| alef::as_utf8` makes it UTF-8 again -- a piece at

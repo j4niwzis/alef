@@ -413,6 +413,20 @@ constexpr resolved resolve(std::span<const bc> original, std::span<const char32_
 
 export namespace alef {
 
+// A run of a line: code units of the paragraph's text, from `first` to
+// `last`, all at one level -- right to left where it is odd. A line's runs
+// come in visual order, left to right; drawing a run means drawing its code
+// points in logical order when it goes left to right and in reverse when it
+// goes right to left, each by its mirrored() glyph in the second case.
+struct bidi_run {
+  std::size_t first = 0;
+  std::size_t last = 0;
+  std::uint8_t level = 0;
+
+  constexpr bool right_to_left() const noexcept { return level % 2 == 1; }
+  friend constexpr bool operator==(const bidi_run&, const bidi_run&) = default;
+};
+
 // A paragraph, its embedding levels resolved: of text in any UTF, or of
 // bidi classes, as the tests of UAX #9 give them.
 class bidi_paragraph {
@@ -422,9 +436,23 @@ class bidi_paragraph {
   constexpr explicit bidi_paragraph(Range&& text,
                                     bidi_direction direction = bidi_direction::automatic) {
     std::vector<char32_t> code_points;
-    for (const char32_t code_point : std::forward<Range>(text) | as_utf32) {
-      code_points.push_back(code_point);
-      classes_.push_back(bidi_class_of(code_point));
+    if constexpr (std::ranges::forward_range<detail::all_of_t<Range>>) {
+      // Where each code point begins in the text, in its code units, so that
+      // a line can be asked for by where it is in the text.
+      auto all = detail::all_of(std::forward<Range>(text));
+      const auto start = std::ranges::begin(all);
+      auto decoded = std::ranges::ref_view(all) | as_utf32;
+      for (auto at = std::ranges::begin(decoded); at != std::ranges::end(decoded); ++at) {
+        offsets_.push_back(static_cast<std::size_t>(std::ranges::distance(start, at.base())));
+        code_points.push_back(*at);
+        classes_.push_back(bidi_class_of(*at));
+      }
+      offsets_.push_back(static_cast<std::size_t>(std::ranges::distance(start, std::ranges::end(all))));
+    } else {
+      for (const char32_t code_point : std::forward<Range>(text) | as_utf32) {
+        code_points.push_back(code_point);
+        classes_.push_back(bidi_class_of(code_point));
+      }
     }
     take(detail::bidi_rules::resolve(classes_, code_points, direction));
   }
@@ -495,13 +523,72 @@ class bidi_paragraph {
     return order;
   }
 
+  // The runs of a line of it, in visual order: the line from code unit
+  // `first` to code unit `last` of the text it was made of -- where
+  // line_breaks puts the ends of lines, say -- or from code point to code
+  // point where it was made of classes or of text read once. The levels are
+  // those of L1; what X9 removes is drawn with what is before it, or, at the
+  // start of the line, with what is after it.
+  constexpr std::vector<bidi_run> runs(std::size_t first, std::size_t last) const {
+    const std::size_t from = index_of(first);
+    std::vector<std::uint8_t> line = line_levels(from, index_of(last));
+    const auto kept = std::ranges::find_if(line, [](std::uint8_t one) { return one != removed_level; });
+    const std::uint8_t lead = kept == line.end() ? level_ : *kept;
+    std::uint8_t carried = lead;
+    for (std::uint8_t& one : line) {
+      if (one == removed_level)
+        one = carried;
+      else
+        carried = one;
+    }
+    std::vector<bidi_run> out;
+    for (std::size_t k = 0; k < line.size();) {
+      std::size_t end = k;
+      while (end < line.size() && line[end] == line[k])
+        ++end;
+      out.push_back({unit_of(from + k), unit_of(from + end), line[k]});
+      k = end;
+    }
+    if (out.empty())
+      return out;
+    // L2, on runs: from the highest level down to the lowest odd one, every
+    // sequence of runs at that level or above turns around.
+    const std::uint8_t highest = std::ranges::max(out, {}, &bidi_run::level).level;
+    const std::uint8_t lowest = std::ranges::min(out, {}, &bidi_run::level).level;
+    const int lowest_odd = lowest % 2 == 1 ? lowest : lowest + 1;
+    for (int level = highest; level >= lowest_odd; --level)
+      for (std::size_t from_run = 0; from_run < out.size();) {
+        if (out[from_run].level < level) {
+          ++from_run;
+          continue;
+        }
+        std::size_t to = from_run;
+        while (to < out.size() && out[to].level >= level)
+          ++to;
+        std::reverse(out.begin() + from_run, out.begin() + to);
+        from_run = to;
+      }
+    return out;
+  }
+
  private:
+  // A code point's index from where it begins in the text, and back.
+  constexpr std::size_t index_of(std::size_t unit) const {
+    if (offsets_.empty())
+      return unit;
+    return static_cast<std::size_t>(std::ranges::lower_bound(offsets_, unit) - offsets_.begin());
+  }
+  constexpr std::size_t unit_of(std::size_t index) const {
+    return offsets_.empty() ? index : offsets_[index];
+  }
+
   constexpr void take(detail::bidi_rules::resolved done) {
     level_ = done.paragraph;
     levels_ = std::move(done.levels);
   }
 
   std::vector<bidi_class> classes_;
+  std::vector<std::size_t> offsets_;
   std::uint8_t level_ = 0;
   std::vector<std::uint8_t> levels_;
 };

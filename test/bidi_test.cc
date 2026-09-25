@@ -381,3 +381,77 @@ CONSTEXPR_TEST(Paragraphs, RandomTextTheSameEveryWay) {
   }
   CONSTEXPR_EXPECT_EQ(wrong, std::size_t{0});
 }
+
+CONSTEXPR_TEST(BidiRuns, ByExample) {
+  using runs = std::vector<alef::bidi_run>;
+  // Hebrew in English: three runs, in the order they were written; the
+  // Hebrew one right to left. Offsets are code units: two bytes a letter.
+  const alef::bidi_paragraph mixed(u8"abc אבג def");
+  CONSTEXPR_EXPECT_TRUE(mixed.runs(0, 14) == (runs{{0, 4, 0}, {4, 10, 1}, {10, 14, 0}}));
+  // A line of it that begins at the Hebrew.
+  CONSTEXPR_EXPECT_TRUE(mixed.runs(4, 14) == (runs{{4, 10, 1}, {10, 14, 0}}));
+  // A right-to-left paragraph: the English, at level 2, is drawn at the
+  // left, and the Hebrew with the space after it at the right.
+  const alef::bidi_paragraph hebrew(u8"אב abc");
+  CONSTEXPR_EXPECT_TRUE(hebrew.level() == 1);
+  CONSTEXPR_EXPECT_TRUE(hebrew.runs(0, 8) == (runs{{5, 8, 2}, {0, 5, 1}}));
+  CONSTEXPR_EXPECT_TRUE(hebrew.runs(0, 8)[1].right_to_left());
+  // In UTF-16 the offsets are of UTF-16.
+  const alef::bidi_paragraph utf16(u"abc אבג");
+  CONSTEXPR_EXPECT_TRUE(utf16.runs(0, 7) == (runs{{0, 4, 0}, {4, 7, 1}}));
+  // What X9 removes makes no run of its own.
+  const alef::bidi_paragraph embedded(u8"a‪b‬c");
+  for (const alef::bidi_run run : embedded.runs(0, 9))
+    CONSTEXPR_EXPECT_TRUE(run.first < run.last);
+}
+
+namespace {
+
+// The runs of a whole paragraph of UTF-32, drawn -- the code points of each in
+// order, or turned round where it goes right to left, without what X9
+// removes -- are the paragraph's visual order.
+constexpr bool runs_draw_the_visual_order(std::u32string_view text) {
+  const alef::bidi_paragraph paragraph(text);
+  std::vector<std::size_t> drawn;
+  std::size_t covered = 0;
+  for (const alef::bidi_run run : paragraph.runs(0, text.size())) {
+    covered += run.last - run.first;
+    std::vector<std::size_t> in_run;
+    for (std::size_t at = run.first; at < run.last; ++at)
+      if (paragraph.levels()[at] != alef::removed_level)
+        in_run.push_back(at);
+    if (run.right_to_left())
+      std::ranges::reverse(in_run);
+    drawn.insert(drawn.end(), in_run.begin(), in_run.end());
+  }
+  return covered == text.size() && drawn == paragraph.visual_order(0, paragraph.size());
+}
+
+}  // namespace
+
+// Text made of what the rules are about: strong letters both ways, numbers,
+// spaces, brackets and every kind of embedding, override and isolate.
+CONSTEXPR_TEST(BidiRuns, RandomTextDrawsTheVisualOrder) {
+  constexpr char32_t interesting[] = {
+      U'a', U'b', U'\U000005D0', U'\U00000627', U'1', U'\U00000661', U' ', U'(', U')', U'-',
+      U'\U0000202A', U'\U0000202B', U'\U0000202C', U'\U0000202D', U'\U0000202E',
+      U'\U00002066', U'\U00002067', U'\U00002068', U'\U00002069',
+  };
+  std::size_t texts = 20000;
+  if consteval {
+    texts = 150;
+  }
+  std::uint64_t state = 0x9E3779B97F4A7C15;
+  const auto next = [&state] {
+    state = state * 6364136223846793005u + 1442695040888963407u;
+    return static_cast<std::size_t>(state >> 33);
+  };
+  std::size_t wrong = 0;
+  for (std::size_t n = 0; n < texts; ++n) {
+    std::u32string text;
+    for (std::size_t length = 1 + next() % 14; length-- > 0;)
+      text += interesting[next() % std::size(interesting)];
+    wrong += !runs_draw_the_visual_order(text);
+  }
+  CONSTEXPR_EXPECT_EQ(wrong, std::size_t{0});
+}
