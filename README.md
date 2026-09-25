@@ -101,6 +101,17 @@ change to the library does not compile a table again.
   a code point is shown as in right-to-left text, are there too. Checked
   against every line of `BidiTest.txt` in every paragraph direction it
   lists, and every line of `BidiCharacterTest.txt` in UTF-32 and UTF-8.
+  Text is split into its paragraphs by P1: `text | alef::paragraphs`, each
+  the part of the text it was read from, its paragraph separator (a code
+  point of class B, a CR LF being one) at its end, and bidirectional if
+  the text is; `alef::next_paragraph_boundary` and
+  `alef::prev_paragraph_boundary` work on iterators. Each paragraph finds
+  its own direction:
+
+  ```cpp
+  for (auto paragraph : text | alef::paragraphs)
+    lay_out(alef::bidi_paragraph(paragraph));
+  ```
 - **Normalization** (UAX #15). `alef::as_nfc`, `alef::as_nfd`,
   `alef::as_nfkc` and `alef::as_nfkd` read text in any UTF and give it in the
   form as code points -- `| alef::as_utf8` makes it UTF-8 again -- a piece at

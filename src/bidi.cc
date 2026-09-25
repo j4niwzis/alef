@@ -1,7 +1,9 @@
 // The bidirectional algorithm: UAX #9, the Unicode Bidirectional Algorithm,
 // for Unicode 18.0.0, with the properties from the table of them.
 //
-// A paragraph of text in any UTF is given its embedding levels -- its own by
+// Text is split into paragraphs by P1, each ending after its paragraph
+// separator, and a paragraph of text in any UTF is given its embedding
+// levels -- its own by
 // P2 and P3, explicit embeddings, overrides and isolates by X1 to X10, and
 // the rest by W1 to W7, N0 to N2, I1 and I2 -- and a line of it its levels
 // by L1 and its visual order by L2.
@@ -505,3 +507,209 @@ class bidi_paragraph {
 };
 
 }  // namespace alef
+
+namespace alef::detail::bidi_rules {
+
+// Whether a code point separates paragraphs: Bidi_Class B.
+constexpr bool separates(char32_t code_point) noexcept {
+  return bidi_class_of(code_point) == bidi_class::b;
+}
+
+template <code_unit Unit, class I>
+constexpr char32_t code_point_at(I at, const I& end) {
+  bool well_formed = false;
+  return read<Unit>(at, end, well_formed);
+}
+
+// P1: the end of the paragraph that begins at `at` -- just past its
+// paragraph separator, a CR LF being one, or `last`.
+template <code_unit Unit, class I, class S>
+constexpr I paragraph_end(I at, const S& last) {
+  bool well_formed = false;
+  while (at != last) {
+    const char32_t one = read<Unit>(at, last, well_formed);
+    if (!separates(one))
+      continue;
+    if (one == U'\r' && at != last) {
+      I after = at;
+      if (read<Unit>(after, last, well_formed) == U'\n')
+        at = after;
+    }
+    return at;
+  }
+  return at;
+}
+
+// The start of the paragraph that ends at `at`, where one begins: back over
+// its separator, if it has one, and on to just after the separator before.
+template <code_unit Unit, class I>
+constexpr I paragraph_start(const I& first, I at) {
+  if (at == first)
+    return at;
+  I back = step_back<Unit>(first, at);
+  if (code_point_at<Unit>(back, at) == U'\n' && back != first) {
+    I before = step_back<Unit>(first, back);
+    if (code_point_at<Unit>(before, back) == U'\r')
+      back = before;
+  }
+  at = back;
+  while (at != first) {
+    I before = step_back<Unit>(first, at);
+    if (separates(code_point_at<Unit>(before, at)))
+      break;
+    at = before;
+  }
+  return at;
+}
+
+}  // namespace alef::detail::bidi_rules
+
+export namespace alef {
+
+// P1: the next paragraph boundary after `at`, which is one -- just past a
+// paragraph separator (Bidi_Class B, a CR LF being one), or `last`.
+template <std::forward_iterator I, std::sentinel_for<I> S>
+  requires code_unit<std::iter_value_t<I>>
+constexpr I next_paragraph_boundary(I at, S last) {
+  return detail::bidi_rules::paragraph_end<std::iter_value_t<I>>(std::move(at), last);
+}
+
+// The paragraph boundary before `at`, which is one. `first` is where the
+// text begins.
+template <std::bidirectional_iterator I>
+  requires code_unit<std::iter_value_t<I>>
+constexpr I prev_paragraph_boundary(I first, I at) {
+  return detail::bidi_rules::paragraph_start<std::iter_value_t<I>>(first, std::move(at));
+}
+
+// The paragraphs of text in any UTF by P1, each the part of the text it was
+// read from with its separator at its end; bidirectional if the text is.
+// Each is what a bidi_paragraph is made of.
+template <std::ranges::view V>
+  requires utf_range<V> && std::ranges::forward_range<V>
+class paragraph_view : public std::ranges::view_interface<paragraph_view<V>> {
+  using From = detail::unit_of<V>;
+
+  template <bool Const>
+  class iterator {
+    using Base = std::conditional_t<Const, const V, V>;
+    using I = std::ranges::iterator_t<Base>;
+    using S = std::ranges::sentinel_t<Base>;
+    static constexpr bool bidirectional = std::ranges::bidirectional_range<Base>;
+
+   public:
+    using value_type = std::ranges::subrange<I>;
+    using difference_type = std::ptrdiff_t;
+    using iterator_concept =
+        std::conditional_t<bidirectional, std::bidirectional_iterator_tag,
+                           std::forward_iterator_tag>;
+
+    iterator()
+      requires std::default_initializable<I>
+    = default;
+    constexpr iterator(Base& base, I at)
+        : begin_(std::move(at)), last_(std::ranges::end(base)) {
+      if constexpr (bidirectional)
+        first_ = std::ranges::begin(base);
+      end_ = detail::bidi_rules::paragraph_end<From>(begin_, last_);
+    }
+
+    constexpr std::ranges::subrange<I> operator*() const { return {begin_, end_}; }
+
+    constexpr iterator& operator++() {
+      begin_ = end_;
+      end_ = detail::bidi_rules::paragraph_end<From>(begin_, last_);
+      return *this;
+    }
+    constexpr iterator operator++(int) {
+      iterator was = *this;
+      ++*this;
+      return was;
+    }
+    constexpr iterator& operator--()
+      requires bidirectional
+    {
+      end_ = begin_;
+      begin_ = detail::bidi_rules::paragraph_start<From>(first_, begin_);
+      return *this;
+    }
+    constexpr iterator operator--(int)
+      requires bidirectional
+    {
+      iterator was = *this;
+      --*this;
+      return was;
+    }
+
+    friend constexpr bool operator==(const iterator& one, const iterator& other) {
+      return one.begin_ == other.begin_;
+    }
+    friend constexpr bool operator==(const iterator& one, std::default_sentinel_t) {
+      return one.begin_ == one.last_;
+    }
+
+    // Where the paragraph begins in V.
+    constexpr I base() const { return begin_; }
+
+   private:
+    [[no_unique_address]] std::conditional_t<bidirectional, I, detail::nothing>
+        first_{};
+    I begin_{};
+    I end_{};
+    [[no_unique_address]] S last_{};
+  };
+
+ public:
+  paragraph_view()
+    requires std::default_initializable<V>
+  = default;
+  constexpr explicit paragraph_view(V base) : base_(std::move(base)) {}
+
+  constexpr V base() const&
+    requires std::copy_constructible<V>
+  {
+    return base_;
+  }
+  constexpr V base() && { return std::move(base_); }
+
+  constexpr auto begin() { return iterator<false>(base_, std::ranges::begin(base_)); }
+  constexpr auto begin() const
+    requires std::ranges::forward_range<const V>
+  {
+    return iterator<true>(base_, std::ranges::begin(base_));
+  }
+  constexpr auto end() {
+    if constexpr (std::ranges::common_range<V>)
+      return iterator<false>(base_, std::ranges::end(base_));
+    else
+      return std::default_sentinel;
+  }
+  constexpr auto end() const
+    requires std::ranges::forward_range<const V>
+  {
+    if constexpr (std::ranges::common_range<const V>)
+      return iterator<true>(base_, std::ranges::end(base_));
+    else
+      return std::default_sentinel;
+  }
+
+ private:
+  V base_ = V();
+};
+
+// text | paragraphs, or paragraphs(text).
+struct paragraphs_fn : std::ranges::range_adaptor_closure<paragraphs_fn> {
+  template <std::ranges::viewable_range Range>
+    requires utf_range<Range> && std::ranges::forward_range<detail::all_of_t<Range>>
+  constexpr auto operator()(Range&& range) const {
+    return paragraph_view<detail::all_of_t<Range>>(
+        detail::all_of(std::forward<Range>(range)));
+  }
+};
+inline constexpr paragraphs_fn paragraphs{};
+
+}  // namespace alef
+
+template <class V>
+inline constexpr bool std::ranges::enable_borrowed_range<alef::paragraph_view<V>> =
+    std::ranges::enable_borrowed_range<V>;

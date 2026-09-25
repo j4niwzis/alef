@@ -283,3 +283,101 @@ CONSTEXPR_TEST(Bidi, ByExample) {
   CONSTEXPR_EXPECT_TRUE(embedded.levels()[1] == alef::removed_level);
   CONSTEXPR_EXPECT_TRUE(embedded.levels()[2] == 2);
 }
+
+namespace {
+
+// P1: the paragraphs of a text, forwards and, through reverse, backwards.
+constexpr std::vector<std::u8string> paragraphs_of(std::u8string_view text) {
+  std::vector<std::u8string> found;
+  for (const auto piece : text | alef::paragraphs)
+    found.emplace_back(piece.begin(), piece.end());
+  return found;
+}
+
+constexpr std::vector<std::u8string> paragraphs_backwards(std::u8string_view text) {
+  std::vector<std::u8string> found;
+  for (const auto piece : text | alef::paragraphs | std::views::reverse)
+    found.emplace_back(piece.begin(), piece.end());
+  std::ranges::reverse(found);
+  return found;
+}
+
+// The paragraphs of the text read in another UTF, back in UTF-8.
+template <class Text>
+constexpr std::vector<std::u8string> paragraphs_in(const Text& text) {
+  std::vector<std::u8string> found;
+  for (const auto piece : std::basic_string_view(text) | alef::paragraphs)
+    found.push_back(piece | alef::as_utf8 | std::ranges::to<std::u8string>());
+  return found;
+}
+
+// Found the same forwards, backwards and in every UTF, and together the text.
+constexpr bool paragraphs_the_same_every_way(std::u8string_view text) {
+  const std::vector<std::u8string> found = paragraphs_of(text);
+  if (paragraphs_backwards(text) != found)
+    return false;
+  std::u8string together;
+  std::vector<std::u8string> decoded;
+  for (const std::u8string& piece : found) {
+    together += piece;
+    decoded.push_back(piece | alef::as_utf8 | std::ranges::to<std::u8string>());
+  }
+  if (together != text)
+    return false;
+  const auto in_utf16 = text | alef::as_utf16 | std::ranges::to<std::u16string>();
+  const auto in_utf32 = text | alef::as_utf32 | std::ranges::to<std::u32string>();
+  return paragraphs_in(in_utf16) == decoded && paragraphs_in(in_utf32) == decoded;
+}
+
+}  // namespace
+
+CONSTEXPR_TEST(Paragraphs, WhatComesApart) {
+  using found = std::vector<std::u8string>;
+  // Every paragraph separator ends a paragraph and stays with it; a CR LF is
+  // one separator. "\x1C" stands alone: a hex escape would swallow the "e".
+  CONSTEXPR_EXPECT_TRUE(paragraphs_of(u8"a\nb\r\nc d\x1C" u8"e\u0085f") ==
+                        (found{u8"a\n", u8"b\r\n", u8"c ", u8"d\x1C", u8"e\u0085", u8"f"}));
+  CONSTEXPR_EXPECT_TRUE(paragraphs_of(u8"\r\r\n\n") == (found{u8"\r", u8"\r\n", u8"\n"}));
+  CONSTEXPR_EXPECT_TRUE(paragraphs_of(u8"a\n") == (found{u8"a\n"}));
+  CONSTEXPR_EXPECT_TRUE(paragraphs_of(u8"") == found{});
+  // A line separator and a tab are not paragraph separators.
+  CONSTEXPR_EXPECT_TRUE(paragraphs_of(u8"a b\tc") == (found{u8"a b\tc"}));
+}
+
+CONSTEXPR_TEST(Paragraphs, EachGoesItsOwnWay) {
+  // P1 before P2: each paragraph finds its own direction.
+  std::vector<std::uint8_t> levels;
+  for (const auto piece : std::u8string_view(u8"abc\nאבג\n123") | alef::paragraphs)
+    levels.push_back(alef::bidi_paragraph(piece).level());
+  CONSTEXPR_EXPECT_TRUE(levels == (std::vector<std::uint8_t>{0, 1, 0}));
+}
+
+CONSTEXPR_TEST(Paragraphs, BoundariesOnIterators) {
+  const std::u8string_view text = u8"ab\r\ncd";
+  CONSTEXPR_EXPECT_TRUE(alef::next_paragraph_boundary(text.begin(), text.end()) == text.begin() + 4);
+  CONSTEXPR_EXPECT_TRUE(alef::next_paragraph_boundary(text.begin() + 4, text.end()) == text.end());
+  CONSTEXPR_EXPECT_TRUE(alef::prev_paragraph_boundary(text.begin(), text.end()) == text.begin() + 4);
+  CONSTEXPR_EXPECT_TRUE(alef::prev_paragraph_boundary(text.begin(), text.begin() + 4) == text.begin());
+}
+
+CONSTEXPR_TEST(Paragraphs, RandomTextTheSameEveryWay) {
+  constexpr std::array<std::u8string_view, 8> pieces{
+      u8"a", u8"\r", u8"\n", u8" ", u8"א", u8"\u0085", u8" ", u8"\xFF"};
+  std::size_t texts = 20000;
+  if consteval {
+    texts = 200;
+  }
+  std::uint64_t state = 0x9E3779B97F4A7C15;
+  const auto next = [&state] {
+    state = state * 6364136223846793005u + 1442695040888963407u;
+    return static_cast<std::size_t>(state >> 33);
+  };
+  std::size_t wrong = 0;
+  for (std::size_t n = 0; n < texts; ++n) {
+    std::u8string text;
+    for (std::size_t length = next() % 12; length-- > 0;)
+      text += pieces[next() % pieces.size()];
+    wrong += !paragraphs_the_same_every_way(text);
+  }
+  CONSTEXPR_EXPECT_EQ(wrong, std::size_t{0});
+}
