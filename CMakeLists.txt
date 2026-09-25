@@ -31,18 +31,27 @@ alef_module(alef_ucd src/ucd.cc)
 alef_module(alef_tables_grapheme src/tables/grapheme.cc alef_ucd)
 alef_module(alef_tables_normalization src/tables/normalization.cc alef_ucd)
 alef_module(alef_tables_word src/tables/word.cc alef_ucd)
+alef_module(alef_tables_general_category src/tables/general_category.cc alef_ucd)
+alef_module(alef_tables_east_asian_width src/tables/east_asian_width.cc alef_ucd)
+alef_module(alef_tables_script src/tables/script.cc alef_ucd)
+alef_module(alef_tables_width src/tables/width.cc alef_ucd)
 alef_module(alef_utf src/utf.cc)
 alef_module(alef_grapheme src/grapheme.cc alef_utf alef_tables_grapheme)
 alef_module(alef_normalization src/normalization.cc
   alef_utf alef_tables_normalization)
 alef_module(alef_word src/word.cc alef_utf alef_tables_word)
-alef_module(alef src/alef.cc alef_utf alef_grapheme alef_normalization alef_word)
+alef_module(alef_properties src/properties.cc alef_utf alef_grapheme
+  alef_tables_general_category alef_tables_east_asian_width alef_tables_script
+  alef_tables_width)
+alef_module(alef src/alef.cc alef_utf alef_grapheme alef_normalization alef_word
+  alef_properties)
 
 add_library(alef::alef ALIAS alef)
 add_library(alef::utf ALIAS alef_utf)
 add_library(alef::grapheme ALIAS alef_grapheme)
 add_library(alef::normalization ALIAS alef_normalization)
 add_library(alef::word ALIAS alef_word)
+add_library(alef::properties ALIAS alef_properties)
 
 # Reading the UCD is constant evaluation over the whole of a file, far past
 # what a compiler lets one constant expression do by default: its default is

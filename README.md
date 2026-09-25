@@ -49,9 +49,10 @@ later. All of it is constexpr.
   same text in UTF-16 and UTF-32 comes apart into the same clusters.
 
 `import alef;` is all of it, and each part is a module of its own as well --
-`alef.utf`, `alef.grapheme`, `alef.word`, `alef.normalization` -- with a
-CMake target of its own: `alef::utf`, `alef::grapheme`, `alef::word`,
-`alef::normalization`, and `alef::alef` for all. Each table is a module of its
+`alef.utf`, `alef.grapheme`, `alef.word`, `alef.normalization`,
+`alef.properties` -- with a CMake target of its own: `alef::utf`,
+`alef::grapheme`, `alef::word`, `alef::normalization`, `alef::properties`,
+and `alef::alef` for all. Each table is a module of its
 own too, importing nothing of the library but the reader of the UCD, so a
 change to the library does not compile a table again.
 - **Words** (UAX #29, word boundaries). `alef::words` is a view of the
@@ -62,6 +63,17 @@ change to the library does not compile a table again.
   `alef::word_break_of` are there too. Checked against every line of
   `WordBreakTest.txt` forwards, backwards and at every byte, and in UTF-16
   and UTF-32.
+- **General properties and width.** `alef::general_category_of`,
+  `alef::east_asian_width_of`, `alef::script_of` and
+  `alef::script_extensions_of`. A script is `alef::script`, found by its
+  name or its ISO 15924 code -- `alef::script("Latin") ==
+  alef::script("Latn")` -- since which scripts there are is data that grows
+  with Unicode. `alef::width(text)` is the columns text in any UTF takes, a
+  terminal say: each grapheme cluster its first code point's width --
+  `alef::width_of`, 0, 1 or 2, and for what East_Asian_Width calls
+  ambiguous, one or two as asked -- but two where U+FE0F asks for emoji, and
+  one where U+FE0E asks for text. Checked against every code point of the
+  files they are read from, and every script both ways.
 - **Normalization** (UAX #15). `alef::as_nfc`, `alef::as_nfd`,
   `alef::as_nfkc` and `alef::as_nfkd` read text in any UTF and give it in the
   form as code points -- `| alef::as_utf8` makes it UTF-8 again -- a piece at

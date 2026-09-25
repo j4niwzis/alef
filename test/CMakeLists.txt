@@ -39,7 +39,7 @@ option(ALEF_CONSTEXPR_TESTS
 
 get_property(alef_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 
-foreach(one IN ITEMS utf grapheme word properties normalization)
+foreach(one IN ITEMS utf grapheme word properties normalization general)
   add_executable(alef-${one}-test ${one}_test.cc)
   target_link_libraries(alef-${one}-test PRIVATE alef ${alef_gtest})
   add_test(NAME ${one} COMMAND alef-${one}-test)
