@@ -42,6 +42,7 @@ alef_module(alef_tables_grapheme src/tables/grapheme.cc alef_ucd)
 alef_module(alef_tables_normalization src/tables/normalization.cc alef_ucd)
 alef_module(alef_tables_word src/tables/word.cc alef_ucd)
 alef_module(alef_tables_sentence src/tables/sentence.cc alef_ucd)
+alef_module(alef_tables_identifier src/tables/identifier.cc alef_ucd)
 alef_module(alef_tables_general_category src/tables/general_category.cc alef_ucd)
 alef_module(alef_tables_east_asian_width src/tables/east_asian_width.cc alef_ucd)
 alef_module(alef_tables_script src/tables/script.cc alef_ucd)
@@ -55,6 +56,7 @@ alef_module(alef_normalization src/normalization.cc
   alef_utf alef_tables_normalization)
 alef_module(alef_word src/word.cc alef_utf alef_tables_word)
 alef_module(alef_sentence src/sentence.cc alef_utf alef_tables_sentence)
+alef_module(alef_identifier src/identifier.cc alef_utf alef_tables_identifier)
 alef_module(alef_properties src/properties.cc alef_utf alef_grapheme
   alef_tables_general_category alef_tables_east_asian_width alef_tables_script
   alef_tables_width)
@@ -62,7 +64,7 @@ alef_module(alef_casing src/casing.cc alef_utf alef_word alef_tables_casing
   alef_tables_normalization)
 alef_module(alef_line src/line.cc alef_utf alef_tables_line)
 alef_module(alef_bidi src/bidi.cc alef_utf alef_tables_bidi)
-alef_module(alef src/alef.cc alef_utf alef_grapheme alef_normalization alef_word alef_sentence
+alef_module(alef src/alef.cc alef_utf alef_grapheme alef_normalization alef_word alef_sentence alef_identifier
   alef_properties alef_casing alef_line alef_bidi)
 
 add_library(alef::alef ALIAS alef)
@@ -71,6 +73,7 @@ add_library(alef::grapheme ALIAS alef_grapheme)
 add_library(alef::normalization ALIAS alef_normalization)
 add_library(alef::word ALIAS alef_word)
 add_library(alef::sentence ALIAS alef_sentence)
+add_library(alef::identifier ALIAS alef_identifier)
 add_library(alef::properties ALIAS alef_properties)
 add_library(alef::casing ALIAS alef_casing)
 add_library(alef::line ALIAS alef_line)

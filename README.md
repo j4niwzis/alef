@@ -49,9 +49,9 @@ later. All of it is constexpr.
   same text in UTF-16 and UTF-32 comes apart into the same clusters.
 
 `import alef;` is all of it, and each part is a module of its own as well --
-`alef.utf`, `alef.grapheme`, `alef.word`, `alef.sentence`, `alef.normalization`,
+`alef.utf`, `alef.grapheme`, `alef.word`, `alef.sentence`, `alef.identifier`, `alef.normalization`,
 `alef.properties`, `alef.casing`, `alef.line`, `alef.bidi` -- with a CMake
-target of its own: `alef::utf`, `alef::grapheme`, `alef::word`, `alef::sentence`,
+target of its own: `alef::utf`, `alef::grapheme`, `alef::word`, `alef::sentence`, `alef::identifier`,
 `alef::normalization`, `alef::properties`, `alef::casing`, `alef::line`,
 `alef::bidi`, and `alef::alef` for all. Each table is a module of its own
 too, importing nothing of the library but the reader of the UCD, so a
@@ -75,6 +75,13 @@ change to the library does not compile a table again.
   `alef::sentence_break_of` gives a code point's class. Checked against
   every line of `SentenceBreakTest.txt` forwards, backwards, at every byte,
   through `std::views::reverse` and in UTF-16 and UTF-32.
+- **Identifiers** (UAX #31). `alef::is_xid_start` and `alef::is_xid_continue`
+  give the properties identifiers are made of, which hold under NFKC;
+  `alef::is_identifier(text)` says whether text in any UTF is one identifier
+  by the default syntax, UAX31-D1: XID_Start, then XID_Continue. For a
+  lexer, `alef::identifier_end(it, last)` is where the identifier that
+  begins at `it` ends. XID_Start and XID_Continue are checked for every
+  code point against `DerivedCoreProperties.txt`.
 - **General properties and width.** `alef::general_category_of`,
   `alef::east_asian_width_of`, `alef::script_of` and
   `alef::script_extensions_of`. A script is `alef::script`, found by its

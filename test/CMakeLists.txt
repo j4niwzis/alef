@@ -45,6 +45,7 @@ set(alef_test_utf alef_utf)
 set(alef_test_grapheme alef_utf alef_grapheme)
 set(alef_test_word alef_utf alef_word)
 set(alef_test_sentence alef_utf alef_sentence)
+set(alef_test_identifier alef_utf alef_identifier)
 set(alef_test_properties alef_grapheme)
 set(alef_test_normalization alef_utf alef_normalization)
 set(alef_test_general alef_properties)
@@ -52,7 +53,7 @@ set(alef_test_casing alef_utf alef_casing)
 set(alef_test_line alef_utf alef_line)
 set(alef_test_bidi alef_utf alef_bidi)
 
-foreach(one IN ITEMS utf grapheme word sentence properties normalization general casing line
+foreach(one IN ITEMS utf grapheme word sentence identifier properties normalization general casing line
     bidi)
   add_executable(alef-${one}-test ${one}_test.cc)
   target_link_libraries(alef-${one}-test PRIVATE ${alef_test_${one}} ${alef_gtest})
