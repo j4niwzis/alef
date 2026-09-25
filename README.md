@@ -50,10 +50,11 @@ later. All of it is constexpr.
 
 `import alef;` is all of it, and each part is a module of its own as well --
 `alef.utf`, `alef.grapheme`, `alef.word`, `alef.normalization`,
-`alef.properties`, `alef.casing`, `alef.line` -- with a CMake target of
-its own: `alef::utf`, `alef::grapheme`, `alef::word`, `alef::normalization`,
-`alef::properties`, `alef::casing`, `alef::line`, and `alef::alef` for all. Each table is a module of its
-own too, importing nothing of the library but the reader of the UCD, so a
+`alef.properties`, `alef.casing`, `alef.line`, `alef.bidi` -- with a CMake
+target of its own: `alef::utf`, `alef::grapheme`, `alef::word`,
+`alef::normalization`, `alef::properties`, `alef::casing`, `alef::line`,
+`alef::bidi`, and `alef::alef` for all. Each table is a module of its own
+too, importing nothing of the library but the reader of the UCD, so a
 change to the library does not compile a table again.
 - **Words** (UAX #29, word boundaries). `alef::words` is a view of the
   pieces between word boundaries of text in any UTF -- words, and the spaces
@@ -89,6 +90,17 @@ change to the library does not compile a table again.
   like -- by the rules of Unicode 18.0.0, LB1 to LB31. `alef::line_break_of`
   gives a code point's class. Checked against every line of
   `LineBreakTest.txt`, and in UTF-16 and UTF-32.
+- **Bidirectional text** (UAX #9). `alef::bidi_paragraph` resolves the
+  embedding levels of a paragraph of text in any UTF -- left to right, right
+  to left, or as its first strong character says -- by the rules of Unicode
+  18.0.0, the explicit embeddings, overrides and isolates, the weak and
+  neutral types and the paired brackets of N0 among them, and gives a line
+  of it its levels by L1 and its visual order by L2:
+  `paragraph.visual_order(first, last)` is the positions of its code points
+  from left to right. `alef::bidi_class_of` and `alef::mirrored`, the glyph
+  a code point is shown as in right-to-left text, are there too. Checked
+  against every line of `BidiTest.txt` in every paragraph direction it
+  lists, and every line of `BidiCharacterTest.txt` in UTF-32 and UTF-8.
 - **Normalization** (UAX #15). `alef::as_nfc`, `alef::as_nfd`,
   `alef::as_nfkc` and `alef::as_nfkd` read text in any UTF and give it in the
   form as code points -- `| alef::as_utf8` makes it UTF-8 again -- a piece at
