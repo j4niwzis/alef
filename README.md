@@ -144,7 +144,8 @@ void show(std::string_view text) {
 ## Building
 
 CMake 4.3.4 or newer, Ninja, and a compiler that builds C++23 modules with
-`import std` and has `#embed`. CI builds with clang 22 and 23 and libc++.
+`import std` and has `#embed`. CI builds with clang 23 and libc++; clang 22
+builds it as well.
 
 ```sh
 cmake -S . -B build -G Ninja
@@ -164,7 +165,9 @@ Reading the UCD is more constant evaluation than clang allows by default, so
 the `alef` target raises the bound with `-fconstexpr-steps=100000000`, and
 raises it for its users as well: with modules, whoever imports alef may
 compile its interfaces too. Through CMake there is nothing to do; without
-it, pass the flag.
+it, pass the flag. `-DALEF_CONSTEXPR_STEPS=<n>` sets another bound: CI
+gives the constant-expression tests 2000000000, for they read whole test
+files while they are compiled.
 
 ## Unicode data
 

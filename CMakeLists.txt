@@ -12,6 +12,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 project(alef VERSION 0.1 LANGUAGES CXX)
 
+# The bound on the steps of one constant evaluation, for alef and for what
+# imports it: enough for the tables. The constexpr tests, which read whole
+# test files while compiled, ask for more.
+set(ALEF_CONSTEXPR_STEPS 100000000 CACHE STRING
+  "clang's -fconstexpr-steps for alef and what imports it")
+
 # One module to a target. A change to a module compiles it again, and what
 # imports it, and nothing else -- the tables least of all: each is a module of
 # its own that imports nothing of the library but alef.ucd, the reader of the
@@ -28,7 +34,7 @@ function(alef_module target file)
   # Said on every module, so that every one of them and everything that
   # imports any of them compiles with the same bound; see below.
   target_compile_options(${target} PUBLIC
-    $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=100000000>)
+    $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${ALEF_CONSTEXPR_STEPS}>)
 endfunction()
 
 alef_module(alef_ucd src/ucd.cc)
