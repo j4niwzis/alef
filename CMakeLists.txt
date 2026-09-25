@@ -25,6 +25,10 @@ function(alef_module target file)
   if(ARGN)
     target_link_libraries(${target} PUBLIC ${ARGN})
   endif()
+  # Said on every module, so that every one of them and everything that
+  # imports any of them compiles with the same bound; see below.
+  target_compile_options(${target} PUBLIC
+    $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=100000000>)
 endfunction()
 
 alef_module(alef_ucd src/ucd.cc)
@@ -35,6 +39,7 @@ alef_module(alef_tables_general_category src/tables/general_category.cc alef_ucd
 alef_module(alef_tables_east_asian_width src/tables/east_asian_width.cc alef_ucd)
 alef_module(alef_tables_script src/tables/script.cc alef_ucd)
 alef_module(alef_tables_width src/tables/width.cc alef_ucd)
+alef_module(alef_tables_casing src/tables/casing.cc alef_ucd)
 alef_module(alef_utf src/utf.cc)
 alef_module(alef_grapheme src/grapheme.cc alef_utf alef_tables_grapheme)
 alef_module(alef_normalization src/normalization.cc
@@ -43,8 +48,10 @@ alef_module(alef_word src/word.cc alef_utf alef_tables_word)
 alef_module(alef_properties src/properties.cc alef_utf alef_grapheme
   alef_tables_general_category alef_tables_east_asian_width alef_tables_script
   alef_tables_width)
+alef_module(alef_casing src/casing.cc alef_utf alef_word alef_tables_casing
+  alef_tables_normalization)
 alef_module(alef src/alef.cc alef_utf alef_grapheme alef_normalization alef_word
-  alef_properties)
+  alef_properties alef_casing)
 
 add_library(alef::alef ALIAS alef)
 add_library(alef::utf ALIAS alef_utf)
@@ -52,6 +59,7 @@ add_library(alef::grapheme ALIAS alef_grapheme)
 add_library(alef::normalization ALIAS alef_normalization)
 add_library(alef::word ALIAS alef_word)
 add_library(alef::properties ALIAS alef_properties)
+add_library(alef::casing ALIAS alef_casing)
 
 # Reading the UCD is constant evaluation over the whole of a file, far past
 # what a compiler lets one constant expression do by default: its default is
@@ -63,12 +71,9 @@ add_library(alef::properties ALIAS alef_properties)
 # with the usage requirements of alef and not with its private options. So
 # what it takes to compile the interfaces is a usage requirement, the way an
 # include directory is. What a consumer's own code gets from it is a higher
-# ceiling and nothing else. It is said on the reader, and everything that
-# reads the UCD links it.
+# ceiling and nothing else. It is said by alef_module, above, on every module.
 #
 # GCC is not given one yet: what it needs has not been measured.
-target_compile_options(alef_ucd PUBLIC
-  $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=100000000>)
 
 option(ALEF_TESTS "Build the tests" ${PROJECT_IS_TOP_LEVEL})
 if(ALEF_TESTS)

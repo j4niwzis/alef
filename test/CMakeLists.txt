@@ -39,9 +39,19 @@ option(ALEF_CONSTEXPR_TESTS
 
 get_property(alef_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 
-foreach(one IN ITEMS utf grapheme word properties normalization general)
+# What each test imports, and nothing more: a change to one part of alef
+# compiles again the tests of that part, and not all of them.
+set(alef_test_utf alef_utf)
+set(alef_test_grapheme alef_utf alef_grapheme)
+set(alef_test_word alef_utf alef_word)
+set(alef_test_properties alef_grapheme)
+set(alef_test_normalization alef_utf alef_normalization)
+set(alef_test_general alef_properties)
+set(alef_test_casing alef_utf alef_casing)
+
+foreach(one IN ITEMS utf grapheme word properties normalization general casing)
   add_executable(alef-${one}-test ${one}_test.cc)
-  target_link_libraries(alef-${one}-test PRIVATE alef ${alef_gtest})
+  target_link_libraries(alef-${one}-test PRIVATE ${alef_test_${one}} ${alef_gtest})
   add_test(NAME ${one} COMMAND alef-${one}-test)
   # Where a test that only runs reads the files of the UCD from.
   target_compile_definitions(alef-${one}-test PRIVATE
@@ -65,7 +75,7 @@ foreach(one IN ITEMS utf grapheme word properties normalization general)
     if(line MATCHES "^CONSTEXPR_TEST\\(([A-Za-z0-9_]+), *([A-Za-z0-9_]+)\\)")
       set(test ${CMAKE_MATCH_1}.${CMAKE_MATCH_2})
       add_library(alef-constexpr-${test} OBJECT EXCLUDE_FROM_ALL ${one}_test.cc)
-      target_link_libraries(alef-constexpr-${test} PRIVATE alef ${alef_gtest})
+      target_link_libraries(alef-constexpr-${test} PRIVATE ${alef_test_${one}} ${alef_gtest})
       target_compile_definitions(alef-constexpr-${test} PRIVATE
         ALEF_CONSTEXPR_TESTS "ALEF_CONSTEXPR_DIAGNOSE=\"${test}\"")
     endif()

@@ -2,7 +2,7 @@
 // from, read here a second way: by code that is not the library's, into
 // ranges searched as they are, where the library has a table of two stages.
 import std;
-import alef;
+import alef.grapheme;
 import gtest;
 
 #include "gtest/gtest-macros.h"

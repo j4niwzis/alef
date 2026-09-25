@@ -1,6 +1,6 @@
 // alef: Unicode for C++, all of it. Each part is a module of its own as
 // well -- alef.utf, alef.grapheme, alef.word, alef.normalization,
-// alef.properties -- for whoever wants
+// alef.properties, alef.casing -- for whoever wants
 // no more than one.
 export module alef;
 
@@ -9,3 +9,4 @@ export import alef.grapheme;
 export import alef.word;
 export import alef.normalization;
 export import alef.properties;
+export import alef.casing;

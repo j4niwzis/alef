@@ -3,7 +3,8 @@
 // of each too; and every code point the file does not list, which is its own
 // normalization in each form.
 import std;
-import alef;
+import alef.utf;
+import alef.normalization;
 import gtest;
 
 #include "gtest/gtest-macros.h"

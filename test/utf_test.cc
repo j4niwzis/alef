@@ -2,7 +2,7 @@
 // reads as instead, and that text comes apart at the same places whether it
 // is read forwards or backwards.
 import std;
-import alef;
+import alef.utf;
 import gtest;
 
 #include "gtest/gtest-macros.h"

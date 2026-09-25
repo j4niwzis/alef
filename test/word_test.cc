@@ -3,7 +3,8 @@
 // same boundaries found forwards, backwards, at every byte, through
 // std::views::reverse and in every UTF.
 import std;
-import alef;
+import alef.utf;
+import alef.word;
 import gtest;
 
 #include "gtest/gtest-macros.h"

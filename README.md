@@ -50,9 +50,9 @@ later. All of it is constexpr.
 
 `import alef;` is all of it, and each part is a module of its own as well --
 `alef.utf`, `alef.grapheme`, `alef.word`, `alef.normalization`,
-`alef.properties` -- with a CMake target of its own: `alef::utf`,
-`alef::grapheme`, `alef::word`, `alef::normalization`, `alef::properties`,
-and `alef::alef` for all. Each table is a module of its
+`alef.properties`, `alef.casing` -- with a CMake target of its own:
+`alef::utf`, `alef::grapheme`, `alef::word`, `alef::normalization`,
+`alef::properties`, `alef::casing`, and `alef::alef` for all. Each table is a module of its
 own too, importing nothing of the library but the reader of the UCD, so a
 change to the library does not compile a table again.
 - **Words** (UAX #29, word boundaries). `alef::words` is a view of the
@@ -74,6 +74,15 @@ change to the library does not compile a table again.
   ambiguous, one or two as asked -- but two where U+FE0F asks for emoji, and
   one where U+FE0E asks for text. Checked against every code point of the
   files they are read from, and every script both ways.
+- **Case.** `alef::as_lower`, `alef::as_upper`, `alef::as_title` and
+  `alef::as_folded` give text in any UTF in the case asked for, as code
+  points, by the full mappings -- `\u00DF` is `SS` in uppercase -- and the
+  conditions of SpecialCasing.txt: a final sigma always, and Lithuanian and
+  Turkish or Azeri as asked, `text | alef::as_lower(alef::casing_language::turkic)`.
+  Titlecase goes word by word. `alef::equal_ignoring_case` compares folded
+  text, and `alef::to_lower` and the others map one code point to one.
+  Checked against every simple mapping of UnicodeData.txt, every folding of
+  CaseFolding.txt and every unconditional mapping of SpecialCasing.txt.
 - **Normalization** (UAX #15). `alef::as_nfc`, `alef::as_nfd`,
   `alef::as_nfkc` and `alef::as_nfkd` read text in any UTF and give it in the
   form as code points -- `| alef::as_utf8` makes it UTF-8 again -- a piece at

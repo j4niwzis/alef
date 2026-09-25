@@ -2,7 +2,7 @@
 // code point, against the files the tables are built from, read here a second
 // way; the names of every script both ways; and the width of text.
 import std;
-import alef;
+import alef.properties;
 import gtest;
 
 #include "gtest/gtest-macros.h"
