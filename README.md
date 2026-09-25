@@ -50,9 +50,9 @@ later. All of it is constexpr.
 
 `import alef;` is all of it, and each part is a module of its own as well --
 `alef.utf`, `alef.grapheme`, `alef.word`, `alef.normalization`,
-`alef.properties`, `alef.casing` -- with a CMake target of its own:
-`alef::utf`, `alef::grapheme`, `alef::word`, `alef::normalization`,
-`alef::properties`, `alef::casing`, and `alef::alef` for all. Each table is a module of its
+`alef.properties`, `alef.casing`, `alef.line` -- with a CMake target of
+its own: `alef::utf`, `alef::grapheme`, `alef::word`, `alef::normalization`,
+`alef::properties`, `alef::casing`, `alef::line`, and `alef::alef` for all. Each table is a module of its
 own too, importing nothing of the library but the reader of the UCD, so a
 change to the library does not compile a table again.
 - **Words** (UAX #29, word boundaries). `alef::words` is a view of the
@@ -83,6 +83,12 @@ change to the library does not compile a table again.
   text, and `alef::to_lower` and the others map one code point to one.
   Checked against every simple mapping of UnicodeData.txt, every folding of
   CaseFolding.txt and every unconditional mapping of SpecialCasing.txt.
+- **Line breaking** (UAX #14). `text | alef::line_breaks` gives the pieces
+  of text in any UTF between the places a line may end, each with the spaces
+  after it and whether a line has to end there -- after a line feed and the
+  like -- by the rules of Unicode 18.0.0, LB1 to LB31. `alef::line_break_of`
+  gives a code point's class. Checked against every line of
+  `LineBreakTest.txt`, and in UTF-16 and UTF-32.
 - **Normalization** (UAX #15). `alef::as_nfc`, `alef::as_nfd`,
   `alef::as_nfkc` and `alef::as_nfkd` read text in any UTF and give it in the
   form as code points -- `| alef::as_utf8` makes it UTF-8 again -- a piece at
