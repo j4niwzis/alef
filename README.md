@@ -49,9 +49,9 @@ later. All of it is constexpr.
   same text in UTF-16 and UTF-32 comes apart into the same clusters.
 
 `import alef;` is all of it, and each part is a module of its own as well --
-`alef.utf`, `alef.grapheme`, `alef.word`, `alef.normalization`,
+`alef.utf`, `alef.grapheme`, `alef.word`, `alef.sentence`, `alef.normalization`,
 `alef.properties`, `alef.casing`, `alef.line`, `alef.bidi` -- with a CMake
-target of its own: `alef::utf`, `alef::grapheme`, `alef::word`,
+target of its own: `alef::utf`, `alef::grapheme`, `alef::word`, `alef::sentence`,
 `alef::normalization`, `alef::properties`, `alef::casing`, `alef::line`,
 `alef::bidi`, and `alef::alef` for all. Each table is a module of its own
 too, importing nothing of the library but the reader of the UCD, so a
@@ -64,6 +64,17 @@ change to the library does not compile a table again.
   `alef::word_break_of` are there too. Checked against every line of
   `WordBreakTest.txt` forwards, backwards and at every byte, and in UTF-16
   and UTF-32.
+- **Sentences** (UAX #29). `text | alef::sentences` takes text in any UTF
+  apart into sentences -- each with the spaces after it and the paragraph
+  separator that ends it, if one does -- by the rules of Unicode 18.0.0,
+  SB1 to SB998: a full stop before a lower-case word, in a number or
+  between capitals does not end one. Each is the part of the text it was
+  read from, and bidirectional if the text is.
+  `alef::next_sentence_boundary`, `alef::prev_sentence_boundary` and
+  `alef::is_sentence_boundary` work on iterators, and
+  `alef::sentence_break_of` gives a code point's class. Checked against
+  every line of `SentenceBreakTest.txt` forwards, backwards, at every byte,
+  through `std::views::reverse` and in UTF-16 and UTF-32.
 - **General properties and width.** `alef::general_category_of`,
   `alef::east_asian_width_of`, `alef::script_of` and
   `alef::script_extensions_of`. A script is `alef::script`, found by its
