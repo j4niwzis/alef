@@ -77,7 +77,11 @@ change to the library does not compile a table again.
   `alef::is_sentence_boundary` work on iterators, and
   `alef::sentence_break_of` gives a code point's class. Checked against
   every line of `SentenceBreakTest.txt` forwards, backwards, at every byte,
-  through `std::views::reverse` and in UTF-16 and UTF-32.
+  through `std::views::reverse`, read once, and in UTF-16 and UTF-32. Over
+  text that can be read only once, `alef::sentences` keeps what it reads
+  until the boundary after it is settled -- SB8 looks ahead as far as the
+  next letter or terminator -- and each sentence is a
+  `std::basic_string_view` of that, good until the next.
 - **Identifiers** (UAX #31). `alef::is_xid_start` and `alef::is_xid_continue`
   give the properties identifiers are made of, which hold under NFKC;
   `alef::is_identifier(text)` says whether text in any UTF is one identifier

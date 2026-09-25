@@ -11,6 +11,7 @@ import gtest;
 
 #include "constexpr_test.h"
 #include "data.h"
+#include "once.h"
 
 namespace {
 
@@ -89,6 +90,17 @@ constexpr std::vector<std::size_t> forwards(std::basic_string_view<Unit> text) {
   std::vector<std::size_t> found{0};
   for (const auto piece : text | alef::sentences)
     found.push_back(static_cast<std::size_t>(piece.end() - text.begin()));
+  return found;
+}
+
+// Where the sentences end, the text read only once.
+constexpr std::vector<std::size_t> read_once(std::u8string_view text) {
+  std::vector<std::size_t> found{0};
+  std::size_t at = 0;
+  for (const std::u8string_view piece : once(text) | alef::sentences) {
+    at += piece.size();
+    found.push_back(at);
+  }
   return found;
 }
 
@@ -202,6 +214,13 @@ CONSTEXPR_TEST(SentenceBreakTest, EveryLineThroughReverse) {
                       "");
 }
 
+CONSTEXPR_TEST(SentenceBreakTest, EveryLineReadOnce) {
+  CONSTEXPR_EXPECT_EQ(lines_where([](const example& one) {
+                        return read_once(one.text) == one.boundaries;
+                      }),
+                      "");
+}
+
 CONSTEXPR_TEST(SentenceBreakTest, EveryLineInUtf16AndUtf32) {
   CONSTEXPR_EXPECT_EQ(lines_where([](const example& one) {
                         return same_in_utf16_and_utf32(one.text);
@@ -238,7 +257,8 @@ CONSTEXPR_TEST(Sentences, RandomTextTheSameEveryWay) {
     }
     const std::vector<std::size_t> found = forwards(std::u8string_view(text));
     if (backwards(text) != found || everywhere(text) != found ||
-        reversed(text) != found || !same_in_utf16_and_utf32(text))
+        reversed(text) != found || read_once(text) != found ||
+        !same_in_utf16_and_utf32(text))
       wrong = hex(text);
   }
   CONSTEXPR_EXPECT_EQ(wrong, "");
