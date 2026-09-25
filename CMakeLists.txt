@@ -34,7 +34,13 @@ function(alef_module target file)
   # Said on every module, so that every one of them and everything that
   # imports any of them compiles with the same bound; see below.
   target_compile_options(${target} PUBLIC
-    $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${ALEF_CONSTEXPR_STEPS}>)
+    $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${ALEF_CONSTEXPR_STEPS}>
+    # clang 23 evaluates constant expressions with its new interpreter by
+    # default, and on the tables -- the UCD parsed while compiled -- it is
+    # about twice as slow as the old one, which clang 22 uses: 19 s against
+    # 9 s for the sentence table. Asked for the old one outright; clang 22
+    # knows no such flag, and needs none.
+    $<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,23>>:-fno-experimental-new-constant-interpreter>)
 endfunction()
 
 alef_module(alef_ucd src/ucd.cc)

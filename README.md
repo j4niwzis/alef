@@ -195,7 +195,9 @@ raises it for its users as well: with modules, whoever imports alef may
 compile its interfaces too. Through CMake there is nothing to do; without
 it, pass the flag. `-DALEF_CONSTEXPR_STEPS=<n>` sets another bound: CI
 gives the constant-expression tests 2000000000, for they read whole test
-files while they are compiled.
+files while they are compiled. With clang 23 and newer, alef asks for the old
+constant interpreter, `-fno-experimental-new-constant-interpreter`: on the
+tables the new one, clang 23's default, is about twice as slow.
 
 ## Unicode data
 
