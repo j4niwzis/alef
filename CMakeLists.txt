@@ -51,6 +51,7 @@ alef_module(alef_tables_sentence src/tables/sentence.cc alef_ucd)
 alef_module(alef_tables_identifier src/tables/identifier.cc alef_ucd)
 alef_module(alef_tables_confusable src/tables/confusable.cc)
 alef_module(alef_tables_preparation src/tables/preparation.cc alef_ucd)
+alef_module(alef_tables_nfkc_casefold src/tables/nfkc_casefold.cc)
 alef_module(alef_tables_general_category src/tables/general_category.cc alef_ucd)
 alef_module(alef_tables_east_asian_width src/tables/east_asian_width.cc alef_ucd)
 alef_module(alef_tables_script src/tables/script.cc alef_ucd)
@@ -70,7 +71,8 @@ alef_module(alef_properties src/properties.cc alef_utf alef_grapheme
   alef_tables_width)
 alef_module(alef_casing src/casing.cc alef_utf alef_word alef_tables_casing
   alef_tables_normalization)
-alef_module(alef_caseless src/caseless.cc alef_utf alef_casing alef_normalization)
+alef_module(alef_caseless src/caseless.cc alef_utf alef_casing alef_normalization
+  alef_tables_nfkc_casefold)
 alef_module(alef_confusable src/confusable.cc alef_utf alef_normalization alef_identifier alef_tables_confusable)
 alef_module(alef_punycode src/punycode.cc)
 alef_module(alef_precis src/precis.cc alef_utf alef_normalization alef_casing alef_properties

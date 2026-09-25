@@ -141,7 +141,11 @@ change to the library does not compile a table again.
   a circled 1 matches 1, a full-width letter the letter. Their keys are
   lazy views, `text | alef::as_canonical_caseless` and
   `text | alef::as_compatibility_caseless`, for hashing and lookup; a
-  `casing_language` asks for Turkic folding.
+  `casing_language` asks for Turkic folding. And `text | alef::as_nfkc_casefold`,
+  toNFKC_Casefold: case, compatibility and default-ignorable differences
+  gone at once, as UAX #31 compares identifiers, with
+  `alef::equal_by_nfkc_casefold(a, b)`; checked for every code point
+  against the property's own definition.
 - **Line breaking** (UAX #14). `text | alef::line_breaks` gives the pieces
   of text in any UTF between the places a line may end, each with the spaces
   after it and whether a line has to end there -- after a line feed and the
