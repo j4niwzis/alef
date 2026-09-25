@@ -16,10 +16,10 @@ add_library(alef)
 add_library(alef::alef ALIAS alef)
 target_sources(alef
   PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES
-    src/alef.cppm
-    src/utf8.cppm
-    src/ucd.cppm
-    src/grapheme.cppm)
+    src/alef.cc
+    src/utf8.cc
+    src/ucd.cc
+    src/grapheme.cc)
 target_compile_features(alef PUBLIC cxx_std_23)
 
 # Reading the UCD is constant evaluation over the whole of a file, far past
