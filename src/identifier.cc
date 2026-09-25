@@ -21,6 +21,13 @@ constexpr bool is_xid_continue(char32_t code_point) noexcept {
   return tables::xid_continue(code_point);
 }
 
+// Whether a code point is Default_Ignorable_Code_Point: one a renderer draws
+// as nothing where it cannot show it -- a soft hyphen, a zero-width joiner,
+// a variation selector. Identifiers and skeletons pass over them.
+constexpr bool is_default_ignorable(char32_t code_point) noexcept {
+  return tables::default_ignorable(code_point);
+}
+
 // The end of the identifier that begins at `at`: past the longest run of
 // XID_Start then XID_Continue, or `at` itself where none begins. Ill-formed
 // code units end an identifier.

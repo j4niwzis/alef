@@ -49,9 +49,9 @@ later. All of it is constexpr.
   same text in UTF-16 and UTF-32 comes apart into the same clusters.
 
 `import alef;` is all of it, and each part is a module of its own as well --
-`alef.utf`, `alef.grapheme`, `alef.word`, `alef.sentence`, `alef.identifier`, `alef.caseless`, `alef.normalization`,
+`alef.utf`, `alef.grapheme`, `alef.word`, `alef.sentence`, `alef.identifier`, `alef.caseless`, `alef.confusable`, `alef.normalization`,
 `alef.properties`, `alef.casing`, `alef.line`, `alef.bidi` -- with a CMake
-target of its own: `alef::utf`, `alef::grapheme`, `alef::word`, `alef::sentence`, `alef::identifier`, `alef::caseless`,
+target of its own: `alef::utf`, `alef::grapheme`, `alef::word`, `alef::sentence`, `alef::identifier`, `alef::caseless`, `alef::confusable`,
 `alef::normalization`, `alef::properties`, `alef::casing`, `alef::line`,
 `alef::bidi`, and `alef::alef` for all. Each table is a module of its own
 too, importing nothing of the library but the reader of the UCD, so a
@@ -85,6 +85,12 @@ change to the library does not compile a table again.
   lexer, `alef::identifier_end(it, last)` is where the identifier that
   begins at `it` ends. XID_Start and XID_Continue are checked for every
   code point against `DerivedCoreProperties.txt`.
+- **Confusables** (UTS #39). `alef::confusable(a, b)` says whether two
+  texts in any UTFs can be taken for each other -- `paypal` and `pаypal`,
+  whose `а` is Cyrillic -- by their skeletons: `text | alef::as_skeleton`,
+  lazily NFD, less what is Default_Ignorable_Code_Point, each code point's
+  prototype from `confusables.txt`, NFD again. Every mapping of the file is
+  checked to come out confusable. `alef::is_default_ignorable` is there too.
 - **General properties and width.** `alef::general_category_of`,
   `alef::east_asian_width_of`, `alef::script_of` and
   `alef::script_extensions_of`. A script is `alef::script`, found by its

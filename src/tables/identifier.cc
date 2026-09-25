@@ -1,6 +1,6 @@
 // The properties identifiers are made of, as one table read from the UCD
-// while this interface is compiled: XID_Start and XID_Continue from
-// DerivedCoreProperties.txt, one byte a code point in a table of two stages.
+// while this interface is compiled: XID_Start, XID_Continue and
+// Default_Ignorable_Code_Point from DerivedCoreProperties.txt, one byte a code point in a table of two stages.
 //
 // A module of its own that imports nothing of the library but the reader of
 // the UCD, so that it is compiled again when its file or that reader change,
@@ -39,10 +39,18 @@ constexpr std::optional<bool> xid_continue_of(const ucd::line& one) {
   return true;
 }
 
+constexpr std::optional<bool> ignorable_of(const ucd::line& one) {
+  if (one.count != 1 || one.fields[0] != "Default_Ignorable_Code_Point")
+    return std::nullopt;
+  return true;
+}
+
+constexpr auto ignorable = ucd::property<bool, derived_core_file, &ignorable_of>;
 constexpr auto xid_start = ucd::property<bool, derived_core_file, &xid_start_of>;
 constexpr auto xid_continue = ucd::property<bool, derived_core_file, &xid_continue_of>;
 
-// Both in one byte: XID_Start in bit 0, XID_Continue in bit 1.
+// In one byte: XID_Start in bit 0, XID_Continue in bit 1,
+// Default_Ignorable_Code_Point in bit 2.
 constexpr std::vector<ucd::run<std::uint8_t>> runs() {
   std::vector<ucd::run<std::uint8_t>> starts;
   std::vector<ucd::run<std::uint8_t>> continues;
@@ -50,7 +58,10 @@ constexpr std::vector<ucd::run<std::uint8_t>> runs() {
     starts.push_back({one.first, one.last, 1});
   for (const auto& one : xid_continue)
     continues.push_back({one.first, one.last, 2});
-  return ucd::merged<std::uint8_t>({starts, continues});
+  std::vector<ucd::run<std::uint8_t>> ignorables;
+  for (const auto& one : ignorable)
+    ignorables.push_back({one.first, one.last, 4});
+  return ucd::merged<std::uint8_t>({starts, continues, ignorables});
 }
 
 inline constexpr std::size_t blocks =
@@ -67,6 +78,9 @@ constexpr bool xid_start(char32_t code_point) noexcept {
 }
 constexpr bool xid_continue(char32_t code_point) noexcept {
   return (identifier_data::table[code_point] & 2) != 0;
+}
+constexpr bool default_ignorable(char32_t code_point) noexcept {
+  return (identifier_data::table[code_point] & 4) != 0;
 }
 
 }  // namespace alef::tables
