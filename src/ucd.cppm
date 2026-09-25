@@ -18,12 +18,13 @@ namespace alef::ucd {
 
 // A property file, as #embed put it into the module: bytes, held as char.
 //
-// Not char8_t, which is what they are. Clang 22 keeps #embed into a char8_t
-// array in a compiled module interface in a form an importer cannot read
-// back: the first constant expression in an importing translation unit that
-// reaches such an array crashes the compiler. An array of char, signed or
-// unsigned char is kept another way, and reads back. Every byte the parser
-// looks at is ASCII, so nothing is lost by it.
+// Not char8_t, which is what they are. #embed into a char8_t array is an
+// EmbedExpr, and clang 22 writes an EmbedExpr into a compiled module
+// interface in a form it cannot read back: the first constant expression in
+// an importing translation unit that reaches the array crashes the compiler
+// (llvm/llvm-project#195350, fixed for clang 23). An array of char whose only
+// initializer is the #embed is kept as a string literal instead, and reads
+// back. Every byte the parser looks at is ASCII, so nothing is lost by it.
 using file = std::string_view;
 
 // One line of data.
@@ -102,36 +103,6 @@ struct range {
   Value value{};
 };
 
-// How much of a file one constant expression reads.
-//
-// A compiler bounds what one constant expression may do -- clang counts its
-// steps, GCC its operations and the turns of each loop -- and a file of the
-// UCD is far past those bounds when it is read in one. Raising them would be
-// a flag for everyone who builds these interfaces, the importers of an
-// installed alef among them. So a file is read in pieces of this size, each
-// by a constant expression of its own, and what they read is put together
-// afterwards, which is cheap.
-inline constexpr std::size_t piece_size = std::size_t{1} << 14;
-
-constexpr std::size_t pieces(file text) noexcept {
-  return (text.size() + piece_size - 1) / piece_size;
-}
-
-// The lines that begin in piece `index` of `text`.
-constexpr file piece(file text, std::size_t index) noexcept {
-  const auto line_at_or_after = [&](std::size_t at) -> std::size_t {
-    if (at == 0)
-      return 0;
-    if (at >= text.size())
-      return text.size();
-    const std::size_t newline = text.find('\n', at - 1);
-    return newline == file::npos ? text.size() : newline + 1;
-  };
-  const std::size_t begin = line_at_or_after(index * piece_size);
-  const std::size_t end = line_at_or_after((index + 1) * piece_size);
-  return text.substr(begin, end - begin);
-}
-
 // How many lines of `text` Select keeps: it answers std::optional<Value>.
 template <class Value, auto Select>
 constexpr std::size_t count(file text) {
@@ -155,32 +126,18 @@ constexpr std::array<range<Value>, N> collect(file text) {
   return out;
 }
 
-// Each piece, counted and then collected, as a constant expression of its own.
-template <class Value, const file& Text, auto Select, std::size_t Index>
-inline constexpr std::size_t piece_count =
-    count<Value, Select>(piece(Text, Index));
-
-template <class Value, const file& Text, auto Select, std::size_t Index>
-inline constexpr auto piece_ranges =
-    collect<Value, piece_count<Value, Text, Select, Index>, Select>(
-        piece(Text, Index));
-
 // A property: the lines of Text that Select keeps, as ranges sorted by where
-// they begin.
+// they begin. Counted, then collected: two constant expressions, each reading
+// the file once, and each within the bound CMakeLists.txt raises.
 template <class Value, const file& Text, auto Select>
-inline constexpr auto property =
-    []<std::size_t... Index>(std::index_sequence<Index...>) {
-      std::array<range<Value>,
-                 (piece_count<Value, Text, Select, Index> + ... + 0)>
-          out{};
-      std::size_t at = 0;
-      ((std::ranges::copy(piece_ranges<Value, Text, Select, Index>,
-                          out.begin() + at),
-        at += piece_count<Value, Text, Select, Index>),
-       ...);
-      std::ranges::sort(out, {}, &range<Value>::first);
-      return out;
-    }(std::make_index_sequence<pieces(Text)>{});
+inline constexpr std::size_t property_count = count<Value, Select>(Text);
+
+template <class Value, const file& Text, auto Select>
+inline constexpr auto property = [] {
+  auto out = collect<Value, property_count<Value, Text, Select>, Select>(Text);
+  std::ranges::sort(out, {}, &range<Value>::first);
+  return out;
+}();
 
 // The value `code_point` has in sorted `ranges`, or `otherwise`.
 template <class Value, std::size_t N>

@@ -22,9 +22,21 @@ target_sources(alef
     src/grapheme.cppm)
 target_compile_features(alef PUBLIC cxx_std_23)
 
-# No flags: the UCD is read in pieces small enough for a compiler's own
-# bounds on constant evaluation (src/ucd.cppm), and #embed is kept quiet where
-# it is used. Whoever compiles these interfaces compiles them as they are.
+# Reading the UCD is constant evaluation over the whole of a file, far past
+# what a compiler lets one constant expression do by default: clang counts
+# about eighteen steps a byte, and its default is 1048576.
+#
+# PUBLIC, because with modules these interfaces are not compiled by this
+# target alone. CMake compiles them again for a target whose settings differ,
+# and a consumer of an installed alef compiles them itself -- in both cases
+# with the usage requirements of alef and not with its private options. So
+# what it takes to compile the interfaces is a usage requirement, the way an
+# include directory is. What a consumer's own code gets from it is a higher
+# ceiling and nothing else.
+#
+# GCC is not given one yet: what it needs has not been measured.
+target_compile_options(alef PUBLIC
+  $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=100000000>)
 
 option(ALEF_TESTS "Build the tests" ${PROJECT_IS_TOP_LEVEL})
 if(ALEF_TESTS)
