@@ -1,30 +1,31 @@
 import std;
 import alef;
 
-// A few at compile time.
-static_assert(std::ranges::distance(alef::graphemes(u8"é")) == 1);
-static_assert(std::ranges::distance(alef::graphemes("\r\n")) == 1);
+// A few at compile time, in all three UTFs.
+static_assert(std::ranges::distance(u8"é" | alef::graphemes) == 1);
+static_assert(std::ranges::distance(u"é" | alef::graphemes) == 1);
+static_assert(std::ranges::distance(U"é" | alef::graphemes) == 1);
+static_assert(std::ranges::distance("\r\n" | alef::graphemes) == 1);
 // Regional indicators go in pairs: four of them are two clusters.
-static_assert(std::ranges::distance(alef::graphemes(u8"\U0001F1E6\U0001F1E7\U0001F1E6\U0001F1E7")) == 2);
+static_assert(std::ranges::distance(u8"\U0001F1E6\U0001F1E7\U0001F1E6\U0001F1E7" | alef::graphemes) == 2);
 // A family: pictographs joined by ZWJ.
-static_assert(std::ranges::distance(alef::graphemes(u8"\U0001F468‍\U0001F469‍\U0001F467")) == 1);
+static_assert(std::ranges::distance(u8"\U0001F468‍\U0001F469‍\U0001F467" | alef::graphemes) == 1);
 // ksha: consonant, virama, consonant (GB9c).
-static_assert(std::ranges::distance(alef::graphemes(u8"क्ष")) == 1);
+static_assert(std::ranges::distance(u8"क्ष" | alef::graphemes) == 1);
 // The example in the README.
 static_assert(std::ranges::distance(u8"é\U0001F9D1\u200D\U0001F4BBक्ष" | alef::graphemes) == 3);
-static_assert(alef::prev_grapheme_boundary(u8"aé", 4) == 1);
-static_assert(alef::is_grapheme_boundary(u8"aé", 1));
-static_assert(!alef::is_grapheme_boundary(u8"aé", 2));
-static_assert(!alef::is_grapheme_boundary(u8"aé", 3));  // inside U+0301
-static_assert(std::ranges::distance(std::views::reverse(alef::graphemes(u8"aé"))) == 2);
+static_assert(std::ranges::distance(u8"aé" | alef::graphemes | std::views::reverse) == 2);
 static_assert(alef::grapheme_cluster_break_of(U'́') == alef::grapheme_cluster_break::extend);
 static_assert(alef::indic_conjunct_break_of(U'्') == alef::indic_conjunct_break::linker);
 static_assert(alef::is_extended_pictographic(U'\U0001F389'));
-// A view of a temporary string would outlive its bytes, so there is none.
-static_assert(std::invocable<decltype(alef::graphemes), std::string&>);
-static_assert(!std::invocable<decltype(alef::graphemes), std::string>);
-static_assert(std::invocable<decltype(alef::graphemes), std::string_view>);
-static_assert(!std::invocable<decltype(alef::code_points), std::u8string>);
+constexpr std::u8string_view accented = u8"aé";
+static_assert(alef::next_grapheme_boundary(accented.begin(), accented.end()) == accented.begin() + 1);
+static_assert(alef::prev_grapheme_boundary(accented.begin(), accented.end()) == accented.begin() + 1);
+static_assert(alef::is_grapheme_boundary(accented.begin(), accented.begin() + 1, accented.end()));
+static_assert(!alef::is_grapheme_boundary(accented.begin(), accented.begin() + 2, accented.end()));
+static_assert(!alef::is_grapheme_boundary(accented.begin(), accented.begin() + 3, accented.end()));  // inside U+0301
+// A temporary string is kept by the view made of it.
+static_assert(std::invocable<decltype(alef::graphemes), std::string>);
 
 namespace {
 
@@ -37,15 +38,19 @@ void fail(std::string_view what) {
 
 std::vector<std::size_t> forwards(std::string_view text) {
   std::vector<std::size_t> found{0};
-  for (const std::string_view cluster : alef::graphemes(text))
-    found.push_back(found.back() + cluster.size());
+  for (const auto cluster : text | alef::graphemes)
+    found.push_back(static_cast<std::size_t>(cluster.end() - text.begin()));
   return found;
 }
 
 std::vector<std::size_t> backwards(std::string_view text) {
-  std::vector<std::size_t> found{text.size()};
-  while (found.back() > 0)
-    found.push_back(alef::prev_grapheme_boundary(text, found.back()));
+  std::vector<std::size_t> found;
+  auto at = text.end();
+  found.push_back(text.size());
+  while (at != text.begin()) {
+    at = alef::prev_grapheme_boundary(text.begin(), at);
+    found.push_back(static_cast<std::size_t>(at - text.begin()));
+  }
   std::ranges::reverse(found);
   if (text.empty())
     found = {0};
@@ -54,45 +59,58 @@ std::vector<std::size_t> backwards(std::string_view text) {
 
 std::vector<std::size_t> everywhere(std::string_view text) {
   std::vector<std::size_t> found;
-  for (std::size_t at = 0; at <= text.size(); ++at)
-    if (alef::is_grapheme_boundary(text, at))
-      found.push_back(at);
+  for (auto at = text.begin();; ++at) {
+    if (alef::is_grapheme_boundary(text.begin(), at, text.end()))
+      found.push_back(static_cast<std::size_t>(at - text.begin()));
+    if (at == text.end())
+      break;
+  }
   return found;
+}
+
+std::vector<std::string_view> clusters(std::string_view text) {
+  std::vector<std::string_view> out;
+  for (const auto cluster : text | alef::graphemes)
+    out.emplace_back(cluster.begin(), cluster.end());
+  return out;
 }
 
 std::vector<std::string_view> reversed(std::string_view text) {
   std::vector<std::string_view> out;
-  for (const std::string_view cluster :
-       std::views::reverse(alef::graphemes(text)))
-    out.push_back(cluster);
+  for (const auto cluster : text | alef::graphemes | std::views::reverse)
+    out.emplace_back(cluster.begin(), cluster.end());
   std::ranges::reverse(out);
   return out;
 }
 
-void append(std::string& text, char32_t code_point) {
-  const alef::encoded bytes = alef::encode(code_point);
-  text.append(reinterpret_cast<const char*>(bytes.bytes.data()), bytes.length);
+// How many code points each cluster of some text is, in whatever UTF.
+template <class Text>
+std::vector<std::ptrdiff_t> sizes(const Text& text) {
+  std::vector<std::ptrdiff_t> out;
+  for (const auto cluster : text | alef::graphemes)
+    out.push_back(std::ranges::distance(cluster | alef::as_utf32));
+  return out;
 }
 
-// Every way of finding the boundaries of `text` finds the same ones.
+// Every way of finding the boundaries of `text` finds the same ones, and the
+// same text in UTF-16 and UTF-32 comes apart into the same clusters.
 bool agree(std::string_view text, std::string_view what) {
   const std::vector<std::size_t> expected = forwards(text);
   bool ok = true;
-  if (backwards(text) != expected) {
-    fail(std::format("{}: backwards", what));
+  const auto wrong = [&](std::string_view how) {
+    fail(std::format("{}: {}", what, how));
     ok = false;
-  }
-  if (everywhere(text) != expected) {
-    fail(std::format("{}: is_grapheme_boundary", what));
-    ok = false;
-  }
-  std::vector<std::string_view> clusters;
-  for (const std::string_view cluster : alef::graphemes(text))
-    clusters.push_back(cluster);
-  if (reversed(text) != clusters) {
-    fail(std::format("{}: reversed", what));
-    ok = false;
-  }
+  };
+  if (backwards(text) != expected)
+    wrong("backwards");
+  if (everywhere(text) != expected)
+    wrong("is_grapheme_boundary");
+  if (reversed(text) != clusters(text))
+    wrong("reversed");
+  const auto utf16 = text | alef::as_utf16 | std::ranges::to<std::u16string>();
+  const auto utf32 = text | alef::as_utf32 | std::ranges::to<std::u32string>();
+  if (sizes(utf16) != sizes(text) || sizes(utf32) != sizes(text))
+    wrong("in UTF-16 or UTF-32");
   return ok;
 }
 
@@ -118,18 +136,30 @@ int main(int argc, char** argv) {
     if (const std::size_t hash = row.find('#'); hash != std::string::npos)
       row.resize(hash);
     std::istringstream tokens(row);
-    std::string text;
-    std::vector<std::size_t> expected;
+    std::u32string code_points;
+    std::vector<std::size_t> marks;
     std::string token;
     while (tokens >> token) {
       if (token == "÷")
-        expected.push_back(text.size());
+        marks.push_back(code_points.size());
       else if (token != "×")
-        append(text, static_cast<char32_t>(std::stoul(token, nullptr, 16)));
+        code_points.push_back(
+            static_cast<char32_t>(std::stoul(token, nullptr, 16)));
     }
-    if (expected.empty())
+    if (marks.empty())
       continue;
     ++cases;
+    // The marks count code points; the boundaries are bytes.
+    std::string text;
+    std::vector<std::size_t> expected;
+    for (std::size_t at = 0; at <= code_points.size(); ++at) {
+      if (std::ranges::contains(marks, at))
+        expected.push_back(text.size());
+      if (at < code_points.size())
+        text += std::u32string_view(&code_points[at], 1) | alef::as_utf8 |
+                std::views::transform([](char8_t unit) { return char(unit); }) |
+                std::ranges::to<std::string>();
+    }
     if (forwards(text) != expected)
       fail(row);
     else
@@ -154,10 +184,13 @@ int main(int argc, char** argv) {
     std::string text;
     const std::uint32_t length = 1 + next() % 12;
     for (std::uint32_t at = 0; at < length; ++at) {
-      if (next() % 16 == 0)
+      if (next() % 16 == 0) {
         text += static_cast<char>(0x80 + next() % 0x40);  // a stray byte
-      else
-        append(text, interesting[next() % std::size(interesting)]);
+      } else {
+        const char32_t one = interesting[next() % std::size(interesting)];
+        for (const char8_t unit : std::u32string_view(&one, 1) | alef::as_utf8)
+          text += static_cast<char>(unit);
+      }
     }
     if (!agree(text, std::format("random text {}", sample)))
       break;

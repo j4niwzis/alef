@@ -8,7 +8,7 @@
 export module alef:grapheme;
 
 import std;
-import :utf8;
+import :utf;
 import :ucd;
 
 export namespace alef {
@@ -166,36 +166,34 @@ constexpr bool is_control(grapheme_cluster_break one) noexcept {
 }
 
 // The end of the cluster that begins at `from`, a boundary: the next boundary
-// after it, or the end of the text. Read forwards, carrying what the rules
-// ask of the text before a boundary instead of looking back for it.
-template <utf8_char Char>
-constexpr std::size_t next_boundary(std::basic_string_view<Char> text,
-                                    std::size_t from) noexcept {
+// after it, or `last`. Read forwards, carrying what the rules ask of the text
+// before a boundary instead of looking back for it.
+template <code_unit Unit, class I, class S>
+constexpr I next_boundary(I from, const S& last) {
   using enum grapheme_cluster_break;
-  if (from >= text.size())
-    return text.size();
-  const decoded first = decode_front(text.substr(from));
-  grapheme_cluster_break before = grapheme_cluster_break_of(first.code_point);
+  if (from == last)
+    return from;
+  bool well_formed = false;
+  I at = from;
+  const char32_t first = read<Unit>(at, last, well_formed);
+  grapheme_cluster_break before = grapheme_cluster_break_of(first);
   // Each describes the text that ends at `before`.
   //
   // Regional indicators in a row (GB12, GB13): counted from `from`, which is
   // a boundary, and so after an even number of them.
   std::size_t indicators = before == regional_indicator ? 1 : 0;
   // Extended_Pictographic Extend* (GB11), and a ZWJ after it.
-  bool pictographic = is_extended_pictographic(first.code_point);
+  bool pictographic = is_extended_pictographic(first);
   bool pictographic_zwj = false;
   // InCB=Linker InCB=Extend* (GB9c).
-  bool linker = indic_conjunct_break_of(first.code_point) ==
-                indic_conjunct_break::linker;
+  bool linker = indic_conjunct_break_of(first) == indic_conjunct_break::linker;
 
-  std::size_t at = from + first.length;
-  while (at < text.size()) {
-    const decoded next = decode_front(text.substr(at));
-    const grapheme_cluster_break after =
-        grapheme_cluster_break_of(next.code_point);
-    const indic_conjunct_break conjunct =
-        indic_conjunct_break_of(next.code_point);
-    const bool next_pictographic = is_extended_pictographic(next.code_point);
+  while (at != last) {
+    I here = at;
+    const char32_t next = read<Unit>(at, last, well_formed);
+    const grapheme_cluster_break after = grapheme_cluster_break_of(next);
+    const indic_conjunct_break conjunct = indic_conjunct_break_of(next);
+    const bool next_pictographic = is_extended_pictographic(next);
     bool joined = false;
     if (before == cr && after == lf)
       joined = true;  // GB3
@@ -219,7 +217,7 @@ constexpr std::size_t next_boundary(std::basic_string_view<Char> text,
     else if (before == regional_indicator && after == regional_indicator)
       joined = indicators % 2 == 1;  // GB12, GB13
     if (!joined)
-      return at;  // GB999, where nothing above joined them
+      return here;  // GB999, where nothing above joined them
 
     indicators = after == regional_indicator ? indicators + 1 : 0;
     pictographic_zwj = pictographic && after == zwj;
@@ -227,26 +225,25 @@ constexpr std::size_t next_boundary(std::basic_string_view<Char> text,
     linker = conjunct == indic_conjunct_break::linker ||
              (linker && conjunct == indic_conjunct_break::extend);
     before = after;
-    at += next.length;
   }
-  return text.size();
+  return at;
 }
 
-// Whether there is a boundary at `at`, where a code point begins, inside the
-// text. Decided between the code points on either side of it, looking back
-// only as far as a rule asks.
-template <utf8_char Char>
-constexpr bool boundary_at(std::basic_string_view<Char> text,
-                           std::size_t at) noexcept {
+// Whether there is a boundary at `at`, where a code point begins, between
+// `first` and `bound`. Decided between the code points on either side of it,
+// looking back only as far as a rule asks.
+template <code_unit Unit, class I, class S>
+constexpr bool boundary_at(const I& first, const I& at, const S& bound) {
   using enum grapheme_cluster_break;
-  const auto code_point = [&](std::size_t where) {
-    return decode_front(text.substr(where)).code_point;
+  const auto code_point = [&](I where) {
+    bool well_formed = false;
+    return read<Unit>(where, bound, well_formed);
   };
-  const std::size_t start = previous_start(text, at);
-  const char32_t first = code_point(start);
-  const char32_t second = code_point(at);
-  const grapheme_cluster_break before = grapheme_cluster_break_of(first);
-  const grapheme_cluster_break after = grapheme_cluster_break_of(second);
+  const I start = step_back<Unit>(first, at);
+  const char32_t one = code_point(start);
+  const char32_t two = code_point(at);
+  const grapheme_cluster_break before = grapheme_cluster_break_of(one);
+  const grapheme_cluster_break after = grapheme_cluster_break_of(two);
   if (before == cr && after == lf)
     return false;  // GB3
   if (is_control(before) || is_control(after))
@@ -262,26 +259,26 @@ constexpr bool boundary_at(std::basic_string_view<Char> text,
   if (before == prepend)
     return false;  // GB9b
   // GB9c: InCB=Linker InCB=Extend* x InCB=Consonant.
-  if (indic_conjunct_break_of(second) == indic_conjunct_break::consonant) {
-    std::size_t where = start;
+  if (indic_conjunct_break_of(two) == indic_conjunct_break::consonant) {
+    I where = start;
     for (;;) {
       const indic_conjunct_break conjunct =
           indic_conjunct_break_of(code_point(where));
       if (conjunct == indic_conjunct_break::linker)
         return false;
-      if (conjunct != indic_conjunct_break::extend || where == 0)
+      if (conjunct != indic_conjunct_break::extend || where == first)
         break;
-      where = previous_start(text, where);
+      where = step_back<Unit>(first, where);
     }
   }
   // GB11: Extended_Pictographic Extend* ZWJ x Extended_Pictographic.
-  if (before == zwj && is_extended_pictographic(second)) {
-    for (std::size_t where = start; where > 0;) {
-      where = previous_start(text, where);
-      const char32_t one = code_point(where);
-      if (is_extended_pictographic(one))
+  if (before == zwj && is_extended_pictographic(two)) {
+    for (I where = start; where != first;) {
+      where = step_back<Unit>(first, where);
+      const char32_t earlier = code_point(where);
+      if (is_extended_pictographic(earlier))
         return false;
-      if (grapheme_cluster_break_of(one) != extend)
+      if (grapheme_cluster_break_of(earlier) != extend)
         break;
     }
   }
@@ -289,8 +286,8 @@ constexpr bool boundary_at(std::basic_string_view<Char> text,
   // to whatever is not one.
   if (before == regional_indicator && after == regional_indicator) {
     std::size_t indicators = 1;
-    for (std::size_t where = start; where > 0;) {
-      where = previous_start(text, where);
+    for (I where = start; where != first;) {
+      where = step_back<Unit>(first, where);
       if (grapheme_cluster_break_of(code_point(where)) != regional_indicator)
         break;
       ++indicators;
@@ -301,145 +298,187 @@ constexpr bool boundary_at(std::basic_string_view<Char> text,
 }
 
 // The start of the cluster that ends at `from`, a boundary.
-template <utf8_char Char>
-constexpr std::size_t previous_boundary(std::basic_string_view<Char> text,
-                                        std::size_t from) noexcept {
-  if (from > text.size())
-    from = text.size();
-  if (from == 0)
-    return 0;
-  std::size_t at = previous_start(text, from);
-  while (at > 0 && !boundary_at(text, at))
-    at = previous_start(text, at);
+template <code_unit Unit, class I>
+constexpr I previous_boundary(const I& first, I from) {
+  if (from == first)
+    return from;
+  I at = step_back<Unit>(first, from);
+  while (at != first && !boundary_at<Unit>(first, at, from))
+    at = step_back<Unit>(first, at);
   return at;
 }
 
-template <utf8_char Char>
-constexpr bool is_boundary(std::basic_string_view<Char> text,
-                           std::size_t at) noexcept {
-  if (at == 0 || at == text.size())
+template <code_unit Unit, class I, class S>
+constexpr bool is_boundary(const I& first, const I& at, const S& last) {
+  if (at == first || at == last)
     return true;  // GB1, GB2
-  if (at > text.size() || !code_point_starts(text, at))
+  if (!starts<Unit>(first, at, last))
     return false;
-  return boundary_at(text, at);
+  return boundary_at<Unit>(first, at, last);
 }
 
 }  // namespace alef::detail
 
 export namespace alef {
 
-// The next grapheme cluster boundary after `from`, which is one: the end of
-// the cluster that begins there.
-template <utf8_text Text>
-constexpr std::size_t next_grapheme_boundary(Text&& text,
-                                             std::size_t from) noexcept {
-  return detail::next_boundary(alef::as_utf8(text), from);
+// The next grapheme cluster boundary after `at`, which is one: the end of the
+// cluster that begins there.
+template <std::forward_iterator I, std::sentinel_for<I> S>
+  requires code_unit<std::iter_value_t<I>>
+constexpr I next_grapheme_boundary(I at, S last) {
+  return detail::next_boundary<std::iter_value_t<I>>(std::move(at), last);
 }
 
-// The boundary before `from`, which is one: the start of the cluster that
-// ends there.
-template <utf8_text Text>
-constexpr std::size_t prev_grapheme_boundary(Text&& text,
-                                             std::size_t from) noexcept {
-  return detail::previous_boundary(alef::as_utf8(text), from);
+// The boundary before `at`, which is one: the start of the cluster that ends
+// there. `first` is where the text begins.
+template <std::bidirectional_iterator I>
+  requires code_unit<std::iter_value_t<I>>
+constexpr I prev_grapheme_boundary(I first, I at) {
+  return detail::previous_boundary<std::iter_value_t<I>>(first, std::move(at));
 }
 
-// Whether a grapheme cluster boundary is at byte `at` of `text`: never inside
-// a code point, always at either end.
-template <utf8_text Text>
-constexpr bool is_grapheme_boundary(Text&& text, std::size_t at) noexcept {
-  return detail::is_boundary(alef::as_utf8(text), at);
+// Whether a grapheme cluster boundary is at `at`: never inside a code point,
+// always at either end.
+template <std::bidirectional_iterator I, std::sentinel_for<I> S>
+  requires code_unit<std::iter_value_t<I>>
+constexpr bool is_grapheme_boundary(I first, I at, S last) {
+  return detail::is_boundary<std::iter_value_t<I>>(first, at, last);
 }
 
-// The grapheme clusters of some UTF-8, each a piece of the text it was given,
-// in either direction.
-template <utf8_char Char>
-class grapheme_view : public std::ranges::view_interface<grapheme_view<Char>> {
- public:
+// The grapheme clusters of text in any UTF, each the part of V it was read
+// from; bidirectional if V is.
+template <std::ranges::view V>
+  requires utf_range<V> && std::ranges::forward_range<V>
+class grapheme_view : public std::ranges::view_interface<grapheme_view<V>> {
+  using From = detail::unit_of<V>;
+
+  template <bool Const>
   class iterator {
+    using Base = std::conditional_t<Const, const V, V>;
+    using I = std::ranges::iterator_t<Base>;
+    using S = std::ranges::sentinel_t<Base>;
+    static constexpr bool bidirectional = std::ranges::bidirectional_range<Base>;
+
    public:
-    using value_type = std::basic_string_view<Char>;
+    using value_type = std::ranges::subrange<I>;
     using difference_type = std::ptrdiff_t;
-    using iterator_concept = std::bidirectional_iterator_tag;
+    using iterator_concept =
+        std::conditional_t<bidirectional, std::bidirectional_iterator_tag,
+                           std::forward_iterator_tag>;
 
-    constexpr iterator() = default;
+    iterator()
+      requires std::default_initializable<I>
+    = default;
 
-    constexpr std::basic_string_view<Char> operator*() const noexcept {
-      return text_.substr(begin_, end_ - begin_);
+    constexpr iterator(Base& base, I at)
+        : begin_(std::move(at)), last_(std::ranges::end(base)) {
+      if constexpr (bidirectional)
+        first_ = std::ranges::begin(base);
+      end_ = detail::next_boundary<From>(begin_, last_);
     }
 
-    constexpr iterator& operator++() noexcept {
+    constexpr std::ranges::subrange<I> operator*() const {
+      return {begin_, end_};
+    }
+
+    constexpr iterator& operator++() {
       begin_ = end_;
-      end_ = detail::next_boundary(text_, begin_);
+      end_ = detail::next_boundary<From>(begin_, last_);
       return *this;
     }
-    constexpr iterator operator++(int) noexcept {
+    constexpr iterator operator++(int) {
       iterator was = *this;
       ++*this;
       return was;
     }
-    constexpr iterator& operator--() noexcept {
+    constexpr iterator& operator--()
+      requires bidirectional
+    {
       end_ = begin_;
-      begin_ = detail::previous_boundary(text_, begin_);
+      begin_ = detail::previous_boundary<From>(first_, begin_);
       return *this;
     }
-    constexpr iterator operator--(int) noexcept {
+    constexpr iterator operator--(int)
+      requires bidirectional
+    {
       iterator was = *this;
       --*this;
       return was;
     }
 
-    constexpr bool operator==(const iterator& other) const noexcept {
-      return begin_ == other.begin_;
+    friend constexpr bool operator==(const iterator& one,
+                                     const iterator& other) {
+      return one.begin_ == other.begin_;
     }
-    constexpr bool operator==(std::default_sentinel_t) const noexcept {
-      return begin_ == text_.size();
+    friend constexpr bool operator==(const iterator& one,
+                                     std::default_sentinel_t) {
+      return one.begin_ == one.last_;
     }
 
-    // Where the cluster begins in the text, in bytes.
-    constexpr std::size_t offset() const noexcept { return begin_; }
+    // Where the cluster begins in V.
+    constexpr I base() const { return begin_; }
 
    private:
-    friend grapheme_view;
-
-    constexpr iterator(std::basic_string_view<Char> text,
-                       std::size_t begin) noexcept
-        : text_(text),
-          begin_(begin),
-          end_(detail::next_boundary(text, begin)) {}
-
-    std::basic_string_view<Char> text_;
-    std::size_t begin_ = 0;
-    std::size_t end_ = 0;
+    [[no_unique_address]] std::conditional_t<bidirectional, I, detail::nothing>
+        first_{};
+    I begin_{};
+    I end_{};
+    [[no_unique_address]] S last_{};
   };
 
-  constexpr grapheme_view() = default;
-  constexpr explicit grapheme_view(std::basic_string_view<Char> text) noexcept
-      : text_(text) {}
+ public:
+  grapheme_view()
+    requires std::default_initializable<V>
+  = default;
+  constexpr explicit grapheme_view(V base) : base_(std::move(base)) {}
 
-  constexpr iterator begin() const noexcept { return iterator(text_, 0); }
-  constexpr iterator end() const noexcept {
-    return iterator(text_, text_.size());
+  constexpr V base() const&
+    requires std::copy_constructible<V>
+  {
+    return base_;
+  }
+  constexpr V base() && { return std::move(base_); }
+
+  constexpr auto begin() {
+    return iterator<false>(base_, std::ranges::begin(base_));
+  }
+  constexpr auto begin() const
+    requires utf_range<const V> && std::ranges::forward_range<const V>
+  {
+    return iterator<true>(base_, std::ranges::begin(base_));
+  }
+  constexpr auto end() {
+    if constexpr (std::ranges::common_range<V>)
+      return iterator<false>(base_, std::ranges::end(base_));
+    else
+      return std::default_sentinel;
+  }
+  constexpr auto end() const
+    requires utf_range<const V> && std::ranges::forward_range<const V>
+  {
+    if constexpr (std::ranges::common_range<const V>)
+      return iterator<true>(base_, std::ranges::end(base_));
+    else
+      return std::default_sentinel;
   }
 
  private:
-  std::basic_string_view<Char> text_;
+  V base_ = V();
 };
 
 // graphemes(text), or text | graphemes.
 struct graphemes_fn : std::ranges::range_adaptor_closure<graphemes_fn> {
-  template <utf8_text Text>
-    requires detail::lasting<Text>
-  constexpr auto operator()(Text&& text) const noexcept {
-    const auto bytes = alef::as_utf8(text);
-    return grapheme_view<typename decltype(bytes)::value_type>(bytes);
+  template <std::ranges::viewable_range Range>
+    requires utf_range<Range> && std::ranges::forward_range<Range>
+  constexpr auto operator()(Range&& range) const {
+    return grapheme_view<detail::all_of_t<Range>>(
+        detail::all_of(std::forward<Range>(range)));
   }
 };
 inline constexpr graphemes_fn graphemes{};
 
 }  // namespace alef
 
-// It holds a view of the text, not the text.
-template <class Char>
-inline constexpr bool
-    std::ranges::enable_borrowed_range<alef::grapheme_view<Char>> = true;
+template <class V>
+inline constexpr bool std::ranges::enable_borrowed_range<alef::grapheme_view<V>> =
+    std::ranges::enable_borrowed_range<V>;

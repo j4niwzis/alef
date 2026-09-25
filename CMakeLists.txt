@@ -17,7 +17,7 @@ add_library(alef::alef ALIAS alef)
 target_sources(alef
   PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES
     src/alef.cc
-    src/utf8.cc
+    src/utf.cc
     src/ucd.cc
     src/grapheme.cc)
 target_compile_features(alef PUBLIC cxx_std_23)

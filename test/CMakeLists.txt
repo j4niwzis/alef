@@ -1,6 +1,6 @@
-add_executable(alef-utf8-test utf8.cc)
-target_link_libraries(alef-utf8-test PRIVATE alef)
-add_test(NAME utf8 COMMAND alef-utf8-test)
+add_executable(alef-utf-test utf.cc)
+target_link_libraries(alef-utf-test PRIVATE alef)
+add_test(NAME utf COMMAND alef-utf-test)
 
 # Against the test file of the same version as the data the tables are read
 # from, which is the only thing that says whether the rules are the rules.
