@@ -8,6 +8,7 @@ import gtest;
 #include "gtest/gtest-macros.h"
 
 #include "constexpr_test.h"
+#include "once.h"
 
 namespace {
 
@@ -35,46 +36,6 @@ constexpr std::string hex(const Text& text) {
   }
   return out;
 }
-
-// Text that can be read only once: an input range and nothing more, as a
-// stream is -- and unlike a stream, one the compiler can read.
-class once : public std::ranges::view_interface<once> {
- public:
-  class iterator {
-   public:
-    using value_type = char;
-    using difference_type = std::ptrdiff_t;
-
-    constexpr iterator(const char* at, const char* last)
-        : at_(at), last_(last) {}
-    iterator(iterator&&) = default;
-    iterator& operator=(iterator&&) = default;
-
-    constexpr char operator*() const { return *at_; }
-    constexpr iterator& operator++() {
-      ++at_;
-      return *this;
-    }
-    constexpr void operator++(int) { ++at_; }
-    friend constexpr bool operator==(const iterator& one,
-                                     std::default_sentinel_t) {
-      return one.at_ == one.last_;
-    }
-
-   private:
-    const char* at_;
-    const char* last_;
-  };
-
-  constexpr explicit once(std::string_view text) : text_(text) {}
-  constexpr iterator begin() {
-    return {text_.data(), text_.data() + text_.size()};
-  }
-  constexpr std::default_sentinel_t end() { return {}; }
-
- private:
-  std::string_view text_;
-};
 
 // Where each code point begins and what it is: read forwards, and read
 // backwards and put back in order.

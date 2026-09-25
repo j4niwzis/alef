@@ -57,11 +57,14 @@ constexpr bool continuation(std::uint8_t byte) noexcept {
 // read -- the code point, or what is replaced by one U+FFFD -- and only past
 // that: a code unit that ends an ill-formed sequence without belonging to it
 // is looked at and not taken, so a range that can be read once reads it as
-// the start of what comes next.
-template <code_unit Unit, class I, class S>
-constexpr char32_t read(I& at, const S& last, bool& well_formed) {
+// the start of what comes next. `taken` is given each code unit that is
+// taken, as it is: all that is left of it, in text read once.
+template <code_unit Unit, class I, class S, class Taken>
+constexpr char32_t read(I& at, const S& last, bool& well_formed, Taken&& taken) {
   if constexpr (utf8_code_unit<Unit>) {
-    const auto lead = static_cast<std::uint8_t>(*at);
+    const Unit first = *at;
+    const auto lead = static_cast<std::uint8_t>(first);
+    taken(first);
     ++at;
     if (lead < 0x80) {
       well_formed = true;
@@ -101,11 +104,13 @@ constexpr char32_t read(I& at, const S& last, bool& well_formed) {
         well_formed = false;
         return replacement_character;
       }
-      const auto next = static_cast<std::uint8_t>(*at);
+      const Unit unit = *at;
+      const auto next = static_cast<std::uint8_t>(unit);
       if (next < low || next > high) {
         well_formed = false;
         return replacement_character;
       }
+      taken(unit);
       ++at;
       value = (value << 6) | (next & 0x3F);
       low = 0x80;
@@ -115,6 +120,7 @@ constexpr char32_t read(I& at, const S& last, bool& well_formed) {
     return value;
   } else if constexpr (utf16_code_unit<Unit>) {
     const char16_t first = *at;
+    taken(first);
     ++at;
     if (first < 0xD800 || first > 0xDFFF) {
       well_formed = true;
@@ -129,16 +135,23 @@ constexpr char32_t read(I& at, const S& last, bool& well_formed) {
       well_formed = false;
       return replacement_character;
     }
+    taken(second);
     ++at;
     well_formed = true;
     return 0x10000 + ((char32_t(first) - 0xD800) << 10) +
            (char32_t(second) - 0xDC00);
   } else {
     const char32_t value = *at;
+    taken(value);
     ++at;
     well_formed = !((value >= 0xD800 && value <= 0xDFFF) || value > 0x10FFFF);
     return well_formed ? value : replacement_character;
   }
+}
+
+template <code_unit Unit, class I, class S>
+constexpr char32_t read(I& at, const S& last, bool& well_formed) {
+  return read<Unit>(at, last, well_formed, [](Unit) {});
 }
 
 // Where the code point that ends at `at` begins. `at` is not `first`, and is

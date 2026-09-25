@@ -165,66 +165,112 @@ constexpr bool is_control(grapheme_cluster_break one) noexcept {
   return one == control || one == cr || one == lf;
 }
 
-// The end of the cluster that begins at `from`, a boundary: the next boundary
-// after it, or `last`. Read forwards, carrying what the rules ask of the text
-// before a boundary instead of looking back for it.
-template <code_unit Unit, class I, class S>
-constexpr I next_boundary(I from, const S& last) {
-  using enum grapheme_cluster_break;
-  if (from == last)
-    return from;
-  bool well_formed = false;
-  I at = from;
-  const char32_t first = read<Unit>(at, last, well_formed);
-  grapheme_cluster_break before = grapheme_cluster_break_of(first);
-  // Each describes the text that ends at `before`.
-  //
-  // Regional indicators in a row (GB12, GB13): counted from `from`, which is
-  // a boundary, and so after an even number of them.
-  std::size_t indicators = before == regional_indicator ? 1 : 0;
-  // Extended_Pictographic Extend* (GB11), and a ZWJ after it.
-  bool pictographic = is_extended_pictographic(first);
-  bool pictographic_zwj = false;
-  // InCB=Linker InCB=Extend* (GB9c).
-  bool linker = indic_conjunct_break_of(first) == indic_conjunct_break::linker;
+// An optional that is not copied or moved with what holds it, as the
+// standard's non-propagating-cache: a view over text that can be read only
+// once keeps its place in the text, and a copy of the view is not there.
+template <class T>
+class non_propagating : public std::optional<T> {
+ public:
+  constexpr non_propagating() noexcept = default;
+  constexpr non_propagating(const non_propagating&) noexcept
+      : std::optional<T>() {}
+  constexpr non_propagating(non_propagating&& other) noexcept
+      : std::optional<T>() {
+    other.reset();
+  }
+  constexpr non_propagating& operator=(const non_propagating& other) noexcept {
+    if (this != &other)
+      this->reset();
+    return *this;
+  }
+  constexpr non_propagating& operator=(non_propagating&& other) noexcept {
+    this->reset();
+    other.reset();
+    return *this;
+  }
+};
 
-  while (at != last) {
-    I here = at;
-    const char32_t next = read<Unit>(at, last, well_formed);
+// What the rules ask of a cluster so far, carried forward from where it
+// began instead of looked back for: enough to say whether the next code
+// point goes on with it.
+class cluster_rules {
+ public:
+  constexpr cluster_rules() noexcept = default;
+
+  // A cluster that begins with `first`. Where a cluster begins is a
+  // boundary, so nothing before it is asked about: the regional indicators
+  // before a boundary are an even number of them, and neither GB9c nor GB11
+  // reaches back past one.
+  constexpr explicit cluster_rules(char32_t first) noexcept
+      : before_(grapheme_cluster_break_of(first)),
+        odd_indicators_(before_ == grapheme_cluster_break::regional_indicator),
+        pictographic_(is_extended_pictographic(first)),
+        linker_(indic_conjunct_break_of(first) == indic_conjunct_break::linker) {}
+
+  // Whether `next` goes on with the cluster, which takes it in if it does.
+  constexpr bool joins(char32_t next) noexcept {
+    using enum grapheme_cluster_break;
     const grapheme_cluster_break after = grapheme_cluster_break_of(next);
     const indic_conjunct_break conjunct = indic_conjunct_break_of(next);
     const bool next_pictographic = is_extended_pictographic(next);
     bool joined = false;
-    if (before == cr && after == lf)
+    if (before_ == cr && after == lf)
       joined = true;  // GB3
-    else if (is_control(before) || is_control(after))
+    else if (is_control(before_) || is_control(after))
       joined = false;  // GB4, GB5
-    else if (before == l &&
+    else if (before_ == l &&
              (after == l || after == v || after == lv || after == lvt))
       joined = true;  // GB6
-    else if ((before == lv || before == v) && (after == v || after == t))
+    else if ((before_ == lv || before_ == v) && (after == v || after == t))
       joined = true;  // GB7
-    else if ((before == lvt || before == t) && after == t)
+    else if ((before_ == lvt || before_ == t) && after == t)
       joined = true;  // GB8
     else if (after == extend || after == zwj || after == spacing_mark)
       joined = true;  // GB9, GB9a
-    else if (before == prepend)
+    else if (before_ == prepend)
       joined = true;  // GB9b
-    else if (linker && conjunct == indic_conjunct_break::consonant)
+    else if (linker_ && conjunct == indic_conjunct_break::consonant)
       joined = true;  // GB9c
-    else if (pictographic_zwj && next_pictographic)
+    else if (pictographic_zwj_ && next_pictographic)
       joined = true;  // GB11
-    else if (before == regional_indicator && after == regional_indicator)
-      joined = indicators % 2 == 1;  // GB12, GB13
+    else if (before_ == regional_indicator && after == regional_indicator)
+      joined = odd_indicators_;  // GB12, GB13
     if (!joined)
-      return here;  // GB999, where nothing above joined them
+      return false;  // GB999, where nothing above joined them
 
-    indicators = after == regional_indicator ? indicators + 1 : 0;
-    pictographic_zwj = pictographic && after == zwj;
-    pictographic = next_pictographic || (pictographic && after == extend);
-    linker = conjunct == indic_conjunct_break::linker ||
-             (linker && conjunct == indic_conjunct_break::extend);
-    before = after;
+    odd_indicators_ = after == regional_indicator && !odd_indicators_;
+    pictographic_zwj_ = pictographic_ && after == zwj;
+    pictographic_ = next_pictographic || (pictographic_ && after == extend);
+    linker_ = conjunct == indic_conjunct_break::linker ||
+              (linker_ && conjunct == indic_conjunct_break::extend);
+    before_ = after;
+    return true;
+  }
+
+ private:
+  grapheme_cluster_break before_ = grapheme_cluster_break::other;
+  // An odd number of regional indicators in a row ends it (GB12, GB13).
+  bool odd_indicators_ = false;
+  // It ends in Extended_Pictographic Extend* (GB11), or in that and a ZWJ.
+  bool pictographic_ = false;
+  bool pictographic_zwj_ = false;
+  // It ends in InCB=Linker InCB=Extend* (GB9c).
+  bool linker_ = false;
+};
+
+// The end of the cluster that begins at `from`, a boundary: the next boundary
+// after it, or `last`.
+template <code_unit Unit, class I, class S>
+constexpr I next_boundary(I from, const S& last) {
+  if (from == last)
+    return from;
+  bool well_formed = false;
+  I at = from;
+  cluster_rules rules(read<Unit>(at, last, well_formed));
+  while (at != last) {
+    I here = at;
+    if (!rules.joins(read<Unit>(at, last, well_formed)))
+      return here;
   }
   return at;
 }
@@ -345,11 +391,164 @@ constexpr bool is_grapheme_boundary(I first, I at, S last) {
   return detail::is_boundary<std::iter_value_t<I>>(first, at, last);
 }
 
-// The grapheme clusters of text in any UTF, each the part of V it was read
-// from; bidirectional if V is.
+// The grapheme clusters of text in any UTF.
+//
+// Over text that can be read only once -- a stream, say -- a cluster is a
+// range of its own, which reads the code units of the cluster from the text
+// as they are asked for, and the code point after them: that is how a
+// cluster is known to have ended, and it is what the next one begins with.
+// Stepping to the next cluster reads past whatever of this one was not asked
+// for. So it goes one cluster at a time, as std::views::lazy_split does over
+// such text: a cluster is read while it is the current one, and not after.
+template <std::ranges::view V>
+  requires utf_range<V>
+class grapheme_view : public std::ranges::view_interface<grapheme_view<V>> {
+  using Unit = detail::unit_of<V>;
+  using I = std::ranges::iterator_t<V>;
+  using S = std::ranges::sentinel_t<V>;
+
+  // Where the reading is: the view's own, because the text is read once.
+  struct reading {
+    I next;
+    S last;
+    // The code point being given out, as code units, and how many of them
+    // have been. None at the end of the text.
+    std::array<Unit, 4> units{};
+    std::uint8_t count = 0;
+    std::uint8_t given = 0;
+    // Whether that code point begins the next cluster rather than going on
+    // with this one, and whether the clusters are all given out.
+    bool ended = false;
+    bool done = false;
+    detail::cluster_rules rules{};
+
+    constexpr reading(I first, S end)
+        : next(std::move(first)), last(std::move(end)) {}
+
+    // The next code point, read into `units`; none at the end of the text.
+    constexpr std::optional<char32_t> read() {
+      given = 0;
+      count = 0;
+      if (next == last)
+        return std::nullopt;
+      bool well_formed = false;
+      return detail::read<Unit>(next, last, well_formed,
+                                [this](Unit unit) { units[count++] = unit; });
+    }
+
+    // Past one code unit of the cluster. Past the last of a code point, the
+    // next one is read, and the rules say whether it goes on with the
+    // cluster.
+    constexpr void advance() {
+      if (++given < count)
+        return;
+      const std::optional<char32_t> code_point = read();
+      if (!code_point) {
+        ended = true;
+      } else if (!rules.joins(*code_point)) {
+        ended = true;
+        rules = detail::cluster_rules(*code_point);
+      }
+    }
+  };
+
+ public:
+  // One cluster: its code units, read from the text as they are asked for.
+  class cluster : public std::ranges::view_interface<cluster> {
+   public:
+    class iterator {
+     public:
+      using value_type = Unit;
+      using difference_type = std::ptrdiff_t;
+
+      iterator() = default;
+      constexpr explicit iterator(reading* at) noexcept : at_(at) {}
+
+      constexpr Unit operator*() const { return at_->units[at_->given]; }
+      constexpr iterator& operator++() {
+        at_->advance();
+        return *this;
+      }
+      constexpr void operator++(int) { at_->advance(); }
+      friend constexpr bool operator==(const iterator& one,
+                                       std::default_sentinel_t) noexcept {
+        return one.at_->ended;
+      }
+
+     private:
+      reading* at_ = nullptr;
+    };
+
+    cluster() = default;
+    constexpr explicit cluster(reading* at) noexcept : at_(at) {}
+    constexpr iterator begin() const noexcept { return iterator(at_); }
+    constexpr std::default_sentinel_t end() const noexcept { return {}; }
+
+   private:
+    reading* at_ = nullptr;
+  };
+
+  class iterator {
+   public:
+    using value_type = cluster;
+    using difference_type = std::ptrdiff_t;
+
+    iterator() = default;
+    constexpr explicit iterator(reading* at) noexcept : at_(at) {}
+
+    constexpr cluster operator*() const noexcept { return cluster(at_); }
+    constexpr iterator& operator++() {
+      while (!at_->ended)
+        at_->advance();
+      if (at_->count == 0)
+        at_->done = true;
+      else
+        at_->ended = false;
+      return *this;
+    }
+    constexpr void operator++(int) { ++*this; }
+    friend constexpr bool operator==(const iterator& one,
+                                     std::default_sentinel_t) noexcept {
+      return one.at_->done;
+    }
+
+   private:
+    reading* at_ = nullptr;
+  };
+
+  grapheme_view()
+    requires std::default_initializable<V>
+  = default;
+  constexpr explicit grapheme_view(V base) : base_(std::move(base)) {}
+
+  constexpr V base() const&
+    requires std::copy_constructible<V>
+  {
+    return base_;
+  }
+  constexpr V base() && { return std::move(base_); }
+
+  constexpr iterator begin() {
+    reading& at =
+        reading_.emplace(std::ranges::begin(base_), std::ranges::end(base_));
+    if (const std::optional<char32_t> first = at.read())
+      at.rules = detail::cluster_rules(*first);
+    else
+      at.ended = at.done = true;
+    return iterator(&at);
+  }
+  constexpr std::default_sentinel_t end() const noexcept { return {}; }
+
+ private:
+  V base_ = V();
+  detail::non_propagating<reading> reading_;
+};
+
+// Over text that can be read more than once, each cluster is the part of V
+// it was read from, and the view is bidirectional if V is.
 template <std::ranges::view V>
   requires utf_range<V> && std::ranges::forward_range<V>
-class grapheme_view : public std::ranges::view_interface<grapheme_view<V>> {
+class grapheme_view<V> : public std::ranges::view_interface<grapheme_view<V>> {
   using From = detail::unit_of<V>;
 
   template <bool Const>
@@ -469,7 +668,7 @@ class grapheme_view : public std::ranges::view_interface<grapheme_view<V>> {
 // graphemes(text), or text | graphemes.
 struct graphemes_fn : std::ranges::range_adaptor_closure<graphemes_fn> {
   template <std::ranges::viewable_range Range>
-    requires utf_range<Range> && std::ranges::forward_range<Range>
+    requires utf_range<Range>
   constexpr auto operator()(Range&& range) const {
     return grapheme_view<detail::all_of_t<Range>>(
         detail::all_of(std::forward<Range>(range)));
@@ -479,6 +678,8 @@ inline constexpr graphemes_fn graphemes{};
 
 }  // namespace alef
 
+// Only over text read more than once: over text read once, the clusters are
+// read through the view.
 template <class V>
 inline constexpr bool std::ranges::enable_borrowed_range<alef::grapheme_view<V>> =
-    std::ranges::enable_borrowed_range<V>;
+    std::ranges::forward_range<V> && std::ranges::enable_borrowed_range<V>;

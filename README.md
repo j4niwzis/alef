@@ -28,8 +28,9 @@ later. All of it is constexpr.
   `alef::is_well_formed` says whether all of some text is.
 - **Grapheme clusters** (UAX #29, extended). `alef::graphemes` is a view of
   the clusters of text in any UTF, each a `std::ranges::subrange` of the
-  text; it is bidirectional if the text is, and needs text it can read more
-  than once. `alef::next_grapheme_boundary`, `alef::prev_grapheme_boundary`
+  text, and bidirectional if the text is. Text that can be read only once
+  comes apart too: each cluster is then a range that reads its code units
+  from the text as they are asked for, one cluster at a time. `alef::next_grapheme_boundary`, `alef::prev_grapheme_boundary`
   and `alef::is_grapheme_boundary` work on iterators into the text, and the
   properties the rules are decided by are there too:
   `alef::grapheme_cluster_break_of`, `alef::indic_conjunct_break_of` and

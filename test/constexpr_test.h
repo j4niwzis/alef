@@ -137,8 +137,8 @@ void check_compiled([[maybe_unused]] const char* file,
   } while (false)
 
 #define CONSTEXPR_EXPECT_TRUE(...)                                           \
-  ALEF_CONSTEXPR_EXPECT_(static_cast<bool>(__VA_ARGS__), EXPECT_TRUE(__VA_ARGS__))
+  ALEF_CONSTEXPR_EXPECT_(static_cast<bool>(__VA_ARGS__), EXPECT_TRUE((__VA_ARGS__)))
 #define CONSTEXPR_EXPECT_FALSE(...)                                          \
-  ALEF_CONSTEXPR_EXPECT_(!static_cast<bool>(__VA_ARGS__), EXPECT_FALSE(__VA_ARGS__))
+  ALEF_CONSTEXPR_EXPECT_(!static_cast<bool>(__VA_ARGS__), EXPECT_FALSE((__VA_ARGS__)))
 #define CONSTEXPR_EXPECT_EQ(one, other)                                      \
   ALEF_CONSTEXPR_EXPECT_((one) == (other), EXPECT_EQ(one, other))

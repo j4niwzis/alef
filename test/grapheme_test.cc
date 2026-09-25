@@ -9,6 +9,7 @@ import gtest;
 #include "gtest/gtest-macros.h"
 
 #include "constexpr_test.h"
+#include "once.h"
 
 namespace {
 
@@ -74,10 +75,31 @@ constexpr std::vector<example> examples() {
 }
 
 // The boundaries of some text, found each way there is.
-constexpr std::vector<std::size_t> forwards(std::u8string_view text) {
+template <class Unit>
+constexpr std::vector<std::size_t> boundaries(std::basic_string_view<Unit> text) {
   std::vector<std::size_t> found{0};
   for (const auto cluster : text | alef::graphemes)
     found.push_back(static_cast<std::size_t>(cluster.end() - text.begin()));
+  return found;
+}
+
+constexpr std::vector<std::size_t> forwards(std::u8string_view text) {
+  return boundaries(text);
+}
+
+// Reading the text once, and counting what each cluster gives out. Nothing,
+// if what they gave out is not the text.
+template <class Unit>
+constexpr std::vector<std::size_t> read_once(std::basic_string_view<Unit> text) {
+  std::vector<std::size_t> found{0};
+  std::basic_string<Unit> again;
+  for (auto&& cluster : once(text) | alef::graphemes) {
+    for (const Unit unit : cluster)
+      again.push_back(unit);
+    found.push_back(again.size());
+  }
+  if (again != text)
+    found.clear();
   return found;
 }
 
@@ -202,6 +224,29 @@ CONSTEXPR_TEST(GraphemeBreakTest, EveryLineInUtf16AndUtf32) {
                       "");
 }
 
+CONSTEXPR_TEST(GraphemeBreakTest, EveryLineReadOnce) {
+  CONSTEXPR_EXPECT_EQ(lines_where([](const example& one) {
+                        return read_once(std::u8string_view(one.text)) ==
+                               one.boundaries;
+                      }),
+                      "");
+}
+
+CONSTEXPR_TEST(GraphemeBreakTest, EveryLineReadOnceInUtf16AndUtf32) {
+  CONSTEXPR_EXPECT_EQ(
+      lines_where([](const example& one) {
+        const auto in_utf16 =
+            one.text | alef::as_utf16 | std::ranges::to<std::u16string>();
+        const auto in_utf32 =
+            one.text | alef::as_utf32 | std::ranges::to<std::u32string>();
+        return read_once(std::u16string_view(in_utf16)) ==
+                   boundaries(std::u16string_view(in_utf16)) &&
+               read_once(std::u32string_view(in_utf32)) ==
+                   boundaries(std::u32string_view(in_utf32));
+      }),
+      "");
+}
+
 // Text made of the code points the rules are about, with stray bytes in it,
 // comes apart the same way however it is read. While compiled, 150 of them.
 CONSTEXPR_TEST(Graphemes, RandomTextTheSameEveryWay) {
@@ -236,7 +281,8 @@ CONSTEXPR_TEST(Graphemes, RandomTextTheSameEveryWay) {
     }
     const std::vector<std::size_t> found = forwards(text);
     if (backwards(text) != found || everywhere(text) != found ||
-        reversed(text) != found || !same_in_utf16_and_utf32(text))
+        reversed(text) != found || !same_in_utf16_and_utf32(text) ||
+        read_once(std::u8string_view(text)) != found)
       wrong = hex(text);
   }
   CONSTEXPR_EXPECT_EQ(wrong, "");
@@ -295,4 +341,29 @@ CONSTEXPR_TEST(Graphemes, TemporaryStringIsKept) {
   CONSTEXPR_EXPECT_EQ(std::ranges::distance(std::u8string(u8"e\U00000301x") |
                                             alef::graphemes),
                       2);
+}
+
+// Text read once: a cluster not read to its end is read past when the next
+// one is asked for, and the view is an input range and no more.
+CONSTEXPR_TEST(Graphemes, TextReadOnce) {
+  constexpr std::u8string_view text =
+      u8"e\U00000301\U0001F9D1\U0000200D\U0001F4BBx";
+  using read_once_view = decltype(once(text) | alef::graphemes);
+  CONSTEXPR_EXPECT_TRUE(std::ranges::input_range<read_once_view>);
+  CONSTEXPR_EXPECT_FALSE(std::ranges::forward_range<read_once_view>);
+  CONSTEXPR_EXPECT_EQ(std::ranges::distance(once(text) | alef::graphemes), 3);
+  std::u8string firsts;
+  for (auto&& cluster : once(text) | alef::graphemes)
+    firsts.push_back(*cluster.begin());
+  CONSTEXPR_EXPECT_TRUE(firsts == std::u8string{u8'e', char8_t(0xF0), u8'x'});
+}
+
+// A stream, which is not for the compiler to read.
+TEST(Graphemes, TextReadFromAStream) {
+  std::istringstream stream("e\xCC\x81" "x\r\n");
+  stream >> std::noskipws;
+  std::vector<std::string> clusters;
+  for (auto&& cluster : std::views::istream<char>(stream) | alef::graphemes)
+    clusters.push_back(cluster | std::ranges::to<std::string>());
+  EXPECT_EQ(clusters, (std::vector<std::string>{"e\xCC\x81", "x", "\r\n"}));
 }
