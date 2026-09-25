@@ -6,6 +6,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Every commit gets a run of its own, and a newer push never cancels one
+# that is under way: each commit is checked to the end.
+concurrency:
+  group: check-${{ github.sha }}
+  cancel-in-progress: false
+
 jobs:
   clang:
     name: clang ${{ matrix.llvm }}, libc++
