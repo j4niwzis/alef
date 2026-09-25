@@ -115,7 +115,9 @@ constexpr bool the_same_read_once(std::basic_string_view<Unit> text) {
          counted(text, once(text), alef::graphemes) == expected &&
          counted(text, text, alef::graphemes(alef::owning<>)) == expected &&
          counted(text, once(text), alef::graphemes(alef::owning<0>)) == expected &&
-         counted(text, text, alef::graphemes(alef::owning<1>)) == expected;
+         counted(text, text, alef::graphemes(alef::owning<1>)) == expected &&
+         counted(text, once(text), alef::graphemes(alef::owning_in_bytes<4>)) ==
+             expected;
 }
 
 constexpr std::vector<std::size_t> backwards(std::u8string_view text) {
@@ -395,6 +397,19 @@ CONSTEXPR_TEST(Graphemes, WhatEachWayGivesOut) {
       alef::grapheme<char8_t, 4>>);
   CONSTEXPR_EXPECT_FALSE(std::ranges::forward_range<
       decltype(std::u8string_view() | alef::graphemes(alef::owning<>))>);
+  // Room said in bytes: as many code units as fit, whatever the UTF.
+  CONSTEXPR_EXPECT_TRUE(std::same_as<
+      std::ranges::range_value_t<decltype(std::u8string_view() | alef::graphemes(alef::owning_in_bytes<64>))>,
+      alef::grapheme<char8_t, 64>>);
+  CONSTEXPR_EXPECT_TRUE(std::same_as<
+      std::ranges::range_value_t<decltype(std::u16string_view() | alef::graphemes(alef::owning_in_bytes<64>))>,
+      alef::grapheme<char16_t, 32>>);
+  CONSTEXPR_EXPECT_TRUE(std::same_as<
+      std::ranges::range_value_t<decltype(std::u32string_view() | alef::graphemes(alef::owning_in_bytes<64>))>,
+      alef::grapheme<char32_t, 16>>);
+  CONSTEXPR_EXPECT_TRUE(std::same_as<
+      std::ranges::range_value_t<decltype(alef::graphemes(std::u16string_view(), alef::owning_in_bytes<7>))>,
+      alef::grapheme<char16_t, 3>>);
 }
 
 CONSTEXPR_TEST(Graphemes, OwnedFromTextReadOnce) {

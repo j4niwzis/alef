@@ -34,7 +34,8 @@ later. All of it is constexpr.
   bytes' worth and on the heap past that. `text | alef::graphemes(alef::owning<>)`
   asks for those over any text -- text expensive to read more than once, or
   at all, whose every code unit is then read once -- and `alef::owning<N>`
-  says how many code units to keep inline. `alef::lazy_graphemes` goes one
+  says how many code units to keep inline, `alef::owning_in_bytes<N>`
+  how many bytes. `alef::lazy_graphemes` goes one
   cluster at a time, each a range that reads its code units from the text as
   they are asked for: a cluster of any length in the same few bytes, for text
   nobody vouches for. `alef::next_grapheme_boundary`, `alef::prev_grapheme_boundary`

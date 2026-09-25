@@ -527,6 +527,13 @@ struct owning_t {};
 template <std::size_t Inline = std::dynamic_extent>
 inline constexpr owning_t<Inline> owning{};
 
+// The same, with the room in each grapheme said in bytes: as many code units
+// as fit in Bytes, whatever the text's UTF.
+template <std::size_t Bytes>
+struct owning_in_bytes_t {};
+template <std::size_t Bytes>
+inline constexpr owning_in_bytes_t<Bytes> owning_in_bytes{};
+
 // The grapheme clusters of text that can be read more than once, each the
 // part of the text it was read from; bidirectional if the text is.
 template <std::ranges::view V>
@@ -884,7 +891,7 @@ class owning_grapheme_view
 // text | graphemes, or graphemes(text): over text that can be read more than
 // once, pieces of it; over text read once, graphemes of their own. And
 // text | graphemes(owning<>), or graphemes(text, owning<>): graphemes of
-// their own over any text.
+// their own over any text -- and owning_in_bytes<N> in place of owning<N>.
 struct graphemes_fn : std::ranges::range_adaptor_closure<graphemes_fn> {
   template <std::ranges::viewable_range Range>
     requires utf_range<Range>
@@ -908,9 +915,21 @@ struct graphemes_fn : std::ranges::range_adaptor_closure<graphemes_fn> {
         detail::all_of(std::forward<Range>(range)));
   }
 
+  template <std::ranges::viewable_range Range, std::size_t Bytes>
+    requires utf_range<Range>
+  constexpr auto operator()(Range&& range, owning_in_bytes_t<Bytes>) const {
+    using View = detail::all_of_t<Range>;
+    return owning_grapheme_view<View, Bytes / sizeof(detail::unit_of<View>)>(
+        detail::all_of(std::forward<Range>(range)));
+  }
+
   template <std::size_t Inline>
   constexpr auto operator()(owning_t<Inline>) const noexcept {
     return detail::with_option<graphemes_fn, owning_t<Inline>>{};
+  }
+  template <std::size_t Bytes>
+  constexpr auto operator()(owning_in_bytes_t<Bytes>) const noexcept {
+    return detail::with_option<graphemes_fn, owning_in_bytes_t<Bytes>>{};
   }
 };
 inline constexpr graphemes_fn graphemes{};
