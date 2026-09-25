@@ -119,6 +119,10 @@ change to the library does not compile a table again.
   like -- by the rules of Unicode 18.0.0, LB1 to LB31. `alef::line_break_of`
   gives a code point's class. Checked against every line of
   `LineBreakTest.txt`, and in UTF-16 and UTF-32.
+  Over text that can be read only once, `alef::line_breaks` keeps what it
+  reads until the break after it is settled, and each piece is of that,
+  good until the next one; checked on every line of `LineBreakTest.txt`
+  and on random text, read once against read more than once.
 - **Bidirectional text** (UAX #9). `alef::bidi_paragraph` resolves the
   embedding levels of a paragraph of text in any UTF -- left to right, right
   to left, or as its first strong character says -- by the rules of Unicode

@@ -322,6 +322,26 @@ constexpr std::pair<I, bool> next_break(context& state, I from, const S& last) {
   return {at, false};
 }
 
+// Whether all that decides the break at `p` has been read, when `e` is only
+// where the text read so far ends: the code point at `p` and the two bases
+// after it -- the furthest the rules look ahead, passing over CM and ZWJ --
+// with a code unit more after them, so that none of them was cut off.
+template <code_unit Unit, class I>
+constexpr bool settled(I p, const I& e) {
+  if (p == e)
+    return false;
+  bool well_formed = false;
+  read<Unit>(p, e, well_formed);
+  for (int bases = 0; bases < 2;) {
+    if (p == e)
+      return false;
+    const base one = resolve(read<Unit>(p, e, well_formed));
+    if (one.cls != lb::cm && one.cls != lb::zwj)
+      ++bases;
+  }
+  return p != e;
+}
+
 }  // namespace alef::detail::line_rules
 
 export namespace alef {
@@ -396,12 +416,109 @@ class line_view : public std::ranges::view_interface<line_view<V>> {
   V base_ = V();
 };
 
-// text | line_breaks, or line_breaks(text).
+// The pieces between line break opportunities of text that can be read only
+// once -- a stream, say. What is read is kept until the break after it is
+// settled; each piece is of what is kept, good until the next one.
+template <std::ranges::view V>
+  requires utf_range<V> && (!std::ranges::forward_range<V>)
+class line_input_view : public std::ranges::view_interface<line_input_view<V>> {
+  using Unit = detail::unit_of<V>;
+
+ public:
+  class iterator {
+   public:
+    using value_type = line_piece<const Unit*>;
+    using difference_type = std::ptrdiff_t;
+    using iterator_concept = std::input_iterator_tag;
+
+    constexpr explicit iterator(line_input_view* view) : view_(view) {}
+    iterator(iterator&&) = default;
+    iterator& operator=(iterator&&) = default;
+
+    constexpr value_type operator*() const { return view_->piece(); }
+    constexpr iterator& operator++() {
+      view_->advance();
+      return *this;
+    }
+    constexpr void operator++(int) { ++*this; }
+    friend constexpr bool operator==(const iterator& one, std::default_sentinel_t) {
+      return one.view_->done_;
+    }
+
+   private:
+    line_input_view* view_;
+  };
+
+  constexpr explicit line_input_view(V base) : base_(std::move(base)) {}
+
+  constexpr iterator begin() {
+    at_.emplace(std::ranges::begin(base_));
+    find();
+    return iterator(this);
+  }
+  constexpr std::default_sentinel_t end() const noexcept { return {}; }
+
+ private:
+  constexpr bool pull() {
+    if (*at_ == std::ranges::end(base_)) {
+      read_all_ = true;
+      return false;
+    }
+    buffer_.push_back(static_cast<Unit>(**at_));
+    ++*at_;
+    return true;
+  }
+  // The piece at the start of what is kept: read on until its end is sure,
+  // each try from what the rules knew before it.
+  constexpr void find() {
+    if (buffer_.empty() && !pull()) {
+      done_ = true;
+      return;
+    }
+    for (;;) {
+      detail::line_rules::context tried = state_;
+      const auto first = buffer_.cbegin();
+      const auto last = buffer_.cend();
+      const auto [end, mandatory] = detail::line_rules::next_break<Unit>(tried, first, last);
+      if (read_all_ || detail::line_rules::settled<Unit>(end, last)) {
+        state_ = tried;
+        end_ = static_cast<std::size_t>(end - first);
+        mandatory_ = mandatory;
+        return;
+      }
+      pull();
+    }
+  }
+  constexpr void advance() {
+    buffer_.erase(0, end_);
+    end_ = 0;
+    find();
+  }
+  constexpr line_piece<const Unit*> piece() const {
+    return {{buffer_.data(), buffer_.data() + end_}, mandatory_};
+  }
+
+  V base_;
+  std::optional<std::ranges::iterator_t<V>> at_;
+  std::basic_string<Unit> buffer_;
+  std::size_t end_ = 0;
+  bool mandatory_ = false;
+  bool read_all_ = false;
+  bool done_ = false;
+  detail::line_rules::context state_;
+};
+
+// text | line_breaks, or line_breaks(text): pieces of the text read more
+// than once, and of what is kept of text read once.
 struct line_breaks_fn : std::ranges::range_adaptor_closure<line_breaks_fn> {
   template <std::ranges::viewable_range Range>
-    requires utf_range<Range> && std::ranges::forward_range<detail::all_of_t<Range>>
+    requires utf_range<Range>
   constexpr auto operator()(Range&& range) const {
-    return line_view<detail::all_of_t<Range>>(detail::all_of(std::forward<Range>(range)));
+    using View = detail::all_of_t<Range>;
+    if constexpr (std::ranges::forward_range<View>)
+      return line_view<View>(detail::all_of(std::forward<Range>(range)));
+    else
+      return line_input_view<View>(detail::all_of(std::forward<Range>(range)));
   }
 };
 inline constexpr line_breaks_fn line_breaks{};

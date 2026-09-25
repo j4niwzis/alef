@@ -9,6 +9,7 @@ import gtest;
 
 #include "constexpr_test.h"
 #include "data.h"
+#include "once.h"
 
 namespace {
 
@@ -170,4 +171,63 @@ CONSTEXPR_TEST(Lines, ByExample) {
                                   {u8"\U00004E8C", false}}));
   CONSTEXPR_EXPECT_TRUE(alef::line_break_of(U' ') == alef::line_break::sp);
   CONSTEXPR_EXPECT_TRUE(alef::line_break_of(U'\n') == alef::line_break::lf);
+}
+
+namespace {
+
+// The pieces, and whether each must end a line, of the text read only once.
+constexpr std::vector<std::pair<std::u8string, bool>> pieces_read_once(std::u8string_view text) {
+  std::vector<std::pair<std::u8string, bool>> out;
+  for (const auto piece : once(text) | alef::line_breaks)
+    out.emplace_back(std::u8string(piece.text.begin(), piece.text.end()), piece.mandatory);
+  return out;
+}
+
+}  // namespace
+
+// Every line when run; while compiled, every 50th.
+CONSTEXPR_TEST(LineBreakTest, EveryLineReadOnce) {
+  std::size_t every = 1;
+  if consteval {
+    every = 50;
+  }
+  CONSTEXPR_EXPECT_EQ(lines_where(every, [](const example& one) {
+                        return pieces_read_once(one.text) == pieces(one.text);
+                      }),
+                      "");
+}
+
+// Text made of what the rules look ahead at -- numbers and what goes around
+// them, marks and joiners, spaces and breaks -- with stray bytes in it, the
+// same read once as read more than once. While compiled, 150 of them.
+CONSTEXPR_TEST(Lines, RandomTextReadOnce) {
+  constexpr char32_t interesting[] = {
+      U'a', U'1', U'9', U' ', U'-', U'(', U')', U'$', U'%', U'.', U',', U'/', U'\n', U'\r',
+      U'\u00A0', U'\u0301', U'\u200D', U'\u4E00', U'\u3002', U'\U0001F468', U'\uAC00',
+      U'\u2014', U'\u201C', U'\u05D0',
+  };
+  std::uint64_t state = 0x2545F4914F6CDD1D;
+  const auto next = [&state] {
+    state = state * 6364136223846793005u + 1442695040888963407u;
+    return static_cast<std::uint32_t>(state >> 33);
+  };
+  int samples = 100000;
+  if consteval {
+    samples = 150;
+  }
+  int wrong = 0;
+  for (int sample = 0; sample < samples; ++sample) {
+    std::u8string text;
+    for (std::uint32_t length = 1 + next() % 12; length-- > 0;) {
+      if (next() % 16 == 0) {
+        text.push_back(static_cast<char8_t>(0x80 + next() % 0x40));  // stray
+      } else {
+        const char32_t one = interesting[next() % std::size(interesting)];
+        for (const char8_t unit : std::u32string_view(&one, 1) | alef::as_utf8)
+          text.push_back(unit);
+      }
+    }
+    wrong += pieces_read_once(text) != pieces(text);
+  }
+  CONSTEXPR_EXPECT_EQ(wrong, 0);
 }
