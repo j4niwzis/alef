@@ -275,6 +275,41 @@ constexpr I next_boundary(I from, const S& last) {
   return at;
 }
 
+// Text read once, a code point at a time: where the reading is, and the code
+// units of the code point read last, which in such text are all that is left
+// of them.
+template <class Unit, class I, class S>
+struct code_point_reader {
+  I next;
+  S last;
+  std::array<Unit, 4> units{};
+  std::uint8_t count = 0;
+
+  constexpr code_point_reader(I first, S end)
+      : next(std::move(first)), last(std::move(end)) {}
+
+  // The next code point, read into `units`; none at the end of the text.
+  constexpr std::optional<char32_t> read() {
+    count = 0;
+    if (next == last)
+      return std::nullopt;
+    bool well_formed = false;
+    return detail::read<Unit>(next, last, well_formed,
+                              [this](Unit unit) { units[count++] = unit; });
+  }
+};
+
+// An adaptor with an option said, as a closure: text | graphemes(owning<>).
+template <class Adaptor, class Option>
+struct with_option
+    : std::ranges::range_adaptor_closure<with_option<Adaptor, Option>> {
+  template <class Range>
+    requires std::invocable<const Adaptor&, Range, Option>
+  constexpr auto operator()(Range&& range) const {
+    return Adaptor{}(std::forward<Range>(range), Option{});
+  }
+};
+
 // Whether there is a boundary at `at`, where a code point begins, between
 // `first` and `bound`. Decided between the code points on either side of it,
 // looking back only as far as a rule asks.
@@ -391,164 +426,112 @@ constexpr bool is_grapheme_boundary(I first, I at, S last) {
   return detail::is_boundary<std::iter_value_t<I>>(first, at, last);
 }
 
-// The grapheme clusters of text in any UTF.
-//
-// Over text that can be read only once -- a stream, say -- a cluster is a
-// range of its own, which reads the code units of the cluster from the text
-// as they are asked for, and the code point after them: that is how a
-// cluster is known to have ended, and it is what the next one begins with.
-// Stepping to the next cluster reads past whatever of this one was not asked
-// for. So it goes one cluster at a time, as std::views::lazy_split does over
-// such text: a cluster is read while it is the current one, and not after.
-template <std::ranges::view V>
-  requires utf_range<V>
-class grapheme_view : public std::ranges::view_interface<grapheme_view<V>> {
-  using Unit = detail::unit_of<V>;
-  using I = std::ranges::iterator_t<V>;
-  using S = std::ranges::sentinel_t<V>;
-
-  // Where the reading is: the view's own, because the text is read once.
-  struct reading {
-    I next;
-    S last;
-    // The code point being given out, as code units, and how many of them
-    // have been. None at the end of the text.
-    std::array<Unit, 4> units{};
-    std::uint8_t count = 0;
-    std::uint8_t given = 0;
-    // Whether that code point begins the next cluster rather than going on
-    // with this one, and whether the clusters are all given out.
-    bool ended = false;
-    bool done = false;
-    detail::cluster_rules rules{};
-
-    constexpr reading(I first, S end)
-        : next(std::move(first)), last(std::move(end)) {}
-
-    // The next code point, read into `units`; none at the end of the text.
-    constexpr std::optional<char32_t> read() {
-      given = 0;
-      count = 0;
-      if (next == last)
-        return std::nullopt;
-      bool well_formed = false;
-      return detail::read<Unit>(next, last, well_formed,
-                                [this](Unit unit) { units[count++] = unit; });
-    }
-
-    // Past one code unit of the cluster. Past the last of a code point, the
-    // next one is read, and the rules say whether it goes on with the
-    // cluster.
-    constexpr void advance() {
-      if (++given < count)
-        return;
-      const std::optional<char32_t> code_point = read();
-      if (!code_point) {
-        ended = true;
-      } else if (!rules.joins(*code_point)) {
-        ended = true;
-        rules = detail::cluster_rules(*code_point);
-      }
-    }
-  };
-
+// One grapheme cluster of its own: its code units, kept in the object itself
+// up to Inline of them, and on the heap past that. A cluster has no bound on
+// its length -- a base and any number of marks after it is one -- so the heap
+// is always there to fall back on; Inline is for the clusters text is mostly
+// made of. By default 32 bytes' worth: 32 code units of UTF-8, 16 of UTF-16,
+// 8 of UTF-32, which a family of four as one emoji fits in.
+template <code_unit Unit, std::size_t Inline = 32 / sizeof(Unit)>
+class grapheme {
  public:
-  // One cluster: its code units, read from the text as they are asked for.
-  class cluster : public std::ranges::view_interface<cluster> {
-   public:
-    class iterator {
-     public:
-      using value_type = Unit;
-      using difference_type = std::ptrdiff_t;
+  using value_type = Unit;
+  using size_type = std::size_t;
+  using difference_type = std::ptrdiff_t;
+  using const_iterator = const Unit*;
+  using iterator = const_iterator;
 
-      iterator() = default;
-      constexpr explicit iterator(reading* at) noexcept : at_(at) {}
+  static constexpr std::size_t inline_capacity = Inline;
 
-      constexpr Unit operator*() const { return at_->units[at_->given]; }
-      constexpr iterator& operator++() {
-        at_->advance();
-        return *this;
-      }
-      constexpr void operator++(int) { at_->advance(); }
-      friend constexpr bool operator==(const iterator& one,
-                                       std::default_sentinel_t) noexcept {
-        return one.at_->ended;
-      }
-
-     private:
-      reading* at_ = nullptr;
-    };
-
-    cluster() = default;
-    constexpr explicit cluster(reading* at) noexcept : at_(at) {}
-    constexpr iterator begin() const noexcept { return iterator(at_); }
-    constexpr std::default_sentinel_t end() const noexcept { return {}; }
-
-   private:
-    reading* at_ = nullptr;
-  };
-
-  class iterator {
-   public:
-    using value_type = cluster;
-    using difference_type = std::ptrdiff_t;
-
-    iterator() = default;
-    constexpr explicit iterator(reading* at) noexcept : at_(at) {}
-
-    constexpr cluster operator*() const noexcept { return cluster(at_); }
-    constexpr iterator& operator++() {
-      while (!at_->ended)
-        at_->advance();
-      if (at_->count == 0)
-        at_->done = true;
-      else
-        at_->ended = false;
-      return *this;
-    }
-    constexpr void operator++(int) { ++*this; }
-    friend constexpr bool operator==(const iterator& one,
-                                     std::default_sentinel_t) noexcept {
-      return one.at_->done;
-    }
-
-   private:
-    reading* at_ = nullptr;
-  };
-
-  grapheme_view()
-    requires std::default_initializable<V>
-  = default;
-  constexpr explicit grapheme_view(V base) : base_(std::move(base)) {}
-
-  constexpr V base() const&
-    requires std::copy_constructible<V>
-  {
-    return base_;
+  constexpr grapheme() noexcept = default;
+  constexpr explicit grapheme(std::basic_string_view<Unit> units) {
+    append(units.data(), units.size());
   }
-  constexpr V base() && { return std::move(base_); }
-
-  constexpr iterator begin() {
-    reading& at =
-        reading_.emplace(std::ranges::begin(base_), std::ranges::end(base_));
-    if (const std::optional<char32_t> first = at.read())
-      at.rules = detail::cluster_rules(*first);
-    else
-      at.ended = at.done = true;
-    return iterator(&at);
+  constexpr grapheme(const grapheme&) = default;
+  constexpr grapheme(grapheme&& other) noexcept
+      : inline_(other.inline_),
+        size_(std::exchange(other.size_, 0)),
+        heap_(std::move(other.heap_)) {}
+  constexpr grapheme& operator=(const grapheme&) = default;
+  constexpr grapheme& operator=(grapheme&& other) noexcept {
+    if (this != &other) {
+      inline_ = other.inline_;
+      size_ = std::exchange(other.size_, 0);
+      heap_ = std::move(other.heap_);
+      other.heap_.clear();
+    }
+    return *this;
   }
-  constexpr std::default_sentinel_t end() const noexcept { return {}; }
+  constexpr ~grapheme() = default;
+
+  constexpr const Unit* data() const noexcept {
+    return heap_.empty() ? inline_.data() : heap_.data();
+  }
+  constexpr std::size_t size() const noexcept { return size_; }
+  constexpr bool empty() const noexcept { return size_ == 0; }
+  constexpr const Unit* begin() const noexcept { return data(); }
+  constexpr const Unit* end() const noexcept { return data() + size_; }
+  constexpr Unit operator[](std::size_t at) const noexcept { return data()[at]; }
+
+  constexpr std::basic_string_view<Unit> view() const noexcept {
+    return {data(), size_};
+  }
+  constexpr operator std::basic_string_view<Unit>() const noexcept {
+    return view();
+  }
+
+  // Whether the code units are in the object itself rather than on the heap.
+  constexpr bool is_inline() const noexcept { return heap_.empty(); }
+
+  friend constexpr bool operator==(const grapheme& one,
+                                   const grapheme& other) noexcept {
+    return one.view() == other.view();
+  }
+  friend constexpr bool operator==(const grapheme& one,
+                                   std::basic_string_view<Unit> other) noexcept {
+    return one.view() == other;
+  }
+  friend constexpr auto operator<=>(const grapheme& one,
+                                    const grapheme& other) noexcept {
+    return one.view() <=> other.view();
+  }
+
+  // Made empty, keeping what was allocated for the next cluster.
+  constexpr void clear() noexcept {
+    size_ = 0;
+    heap_.clear();
+  }
+  constexpr void append(const Unit* units, std::size_t count) {
+    if (heap_.empty() && size_ + count <= Inline) {
+      std::copy_n(units, count, inline_.data() + size_);
+    } else {
+      if (heap_.empty())
+        heap_.assign(inline_.data(), inline_.data() + size_);
+      heap_.insert(heap_.end(), units, units + count);
+    }
+    size_ += count;
+  }
 
  private:
-  V base_ = V();
-  detail::non_propagating<reading> reading_;
+  std::array<Unit, Inline> inline_{};
+  std::size_t size_ = 0;
+  std::vector<Unit> heap_;
 };
 
-// Over text that can be read more than once, each cluster is the part of V
-// it was read from, and the view is bidirectional if V is.
+// Asks graphemes for graphemes of their own over any text -- text that is
+// expensive to read more than once, or to read at all -- so each code unit
+// is read once and what was read is kept. owning<N> keeps N code units in
+// each grapheme itself; owning<> 32 bytes' worth of the text's UTF.
+template <std::size_t Inline = std::dynamic_extent>
+struct owning_t {};
+template <std::size_t Inline = std::dynamic_extent>
+inline constexpr owning_t<Inline> owning{};
+
+// The grapheme clusters of text that can be read more than once, each the
+// part of the text it was read from; bidirectional if the text is.
 template <std::ranges::view V>
   requires utf_range<V> && std::ranges::forward_range<V>
-class grapheme_view<V> : public std::ranges::view_interface<grapheme_view<V>> {
+class grapheme_view : public std::ranges::view_interface<grapheme_view<V>> {
   using From = detail::unit_of<V>;
 
   template <bool Const>
@@ -665,21 +648,288 @@ class grapheme_view<V> : public std::ranges::view_interface<grapheme_view<V>> {
   V base_ = V();
 };
 
-// graphemes(text), or text | graphemes.
+// The grapheme clusters of text in any UTF, one at a time, each a range of
+// its own that reads the code units of the cluster from the text as they
+// are asked for -- and the code point after them: that is how a cluster is
+// known to have ended, and it is what the next one begins with. Stepping to
+// the next cluster reads past whatever of this one was not asked for. A
+// cluster is read while it is the current one and not after, as
+// std::views::lazy_split goes, and one of any length is read in the same few
+// bytes, which is what text nobody vouches for is to be read with.
+template <std::ranges::view V>
+  requires utf_range<V>
+class lazy_grapheme_view
+    : public std::ranges::view_interface<lazy_grapheme_view<V>> {
+  using Unit = detail::unit_of<V>;
+  using I = std::ranges::iterator_t<V>;
+  using S = std::ranges::sentinel_t<V>;
+
+  // Where the reading is: the view's own, because the text is read once.
+  struct reading : detail::code_point_reader<Unit, I, S> {
+    using detail::code_point_reader<Unit, I, S>::code_point_reader;
+
+    // How many code units of the code point read last have been given out;
+    // whether it begins the next cluster rather than going on with this one;
+    // whether the clusters are all given out.
+    std::uint8_t given = 0;
+    bool ended = false;
+    bool done = false;
+    detail::cluster_rules rules{};
+
+    // Past one code unit of the cluster. Past the last of a code point, the
+    // next one is read, and the rules say whether it goes on with the
+    // cluster.
+    constexpr void advance() {
+      if (++given < this->count)
+        return;
+      given = 0;
+      const std::optional<char32_t> code_point = this->read();
+      if (!code_point) {
+        ended = true;
+      } else if (!rules.joins(*code_point)) {
+        ended = true;
+        rules = detail::cluster_rules(*code_point);
+      }
+    }
+  };
+
+ public:
+  // One cluster: its code units, read from the text as they are asked for.
+  class cluster : public std::ranges::view_interface<cluster> {
+   public:
+    class iterator {
+     public:
+      using value_type = Unit;
+      using difference_type = std::ptrdiff_t;
+
+      iterator() = default;
+      constexpr explicit iterator(reading* at) noexcept : at_(at) {}
+
+      constexpr Unit operator*() const { return at_->units[at_->given]; }
+      constexpr iterator& operator++() {
+        at_->advance();
+        return *this;
+      }
+      constexpr void operator++(int) { at_->advance(); }
+      friend constexpr bool operator==(const iterator& one,
+                                       std::default_sentinel_t) noexcept {
+        return one.at_->ended;
+      }
+
+     private:
+      reading* at_ = nullptr;
+    };
+
+    cluster() = default;
+    constexpr explicit cluster(reading* at) noexcept : at_(at) {}
+    constexpr iterator begin() const noexcept { return iterator(at_); }
+    constexpr std::default_sentinel_t end() const noexcept { return {}; }
+
+   private:
+    reading* at_ = nullptr;
+  };
+
+  class iterator {
+   public:
+    using value_type = cluster;
+    using difference_type = std::ptrdiff_t;
+
+    iterator() = default;
+    constexpr explicit iterator(reading* at) noexcept : at_(at) {}
+
+    constexpr cluster operator*() const noexcept { return cluster(at_); }
+    constexpr iterator& operator++() {
+      while (!at_->ended)
+        at_->advance();
+      if (at_->count == 0)
+        at_->done = true;
+      else
+        at_->ended = false;
+      return *this;
+    }
+    constexpr void operator++(int) { ++*this; }
+    friend constexpr bool operator==(const iterator& one,
+                                     std::default_sentinel_t) noexcept {
+      return one.at_->done;
+    }
+
+   private:
+    reading* at_ = nullptr;
+  };
+
+  lazy_grapheme_view()
+    requires std::default_initializable<V>
+  = default;
+  constexpr explicit lazy_grapheme_view(V base) : base_(std::move(base)) {}
+
+  constexpr V base() const&
+    requires std::copy_constructible<V>
+  {
+    return base_;
+  }
+  constexpr V base() && { return std::move(base_); }
+
+  constexpr iterator begin() {
+    reading& at =
+        reading_.emplace(std::ranges::begin(base_), std::ranges::end(base_));
+    if (const std::optional<char32_t> first = at.read())
+      at.rules = detail::cluster_rules(*first);
+    else
+      at.ended = at.done = true;
+    return iterator(&at);
+  }
+  constexpr std::default_sentinel_t end() const noexcept { return {}; }
+
+ private:
+  V base_ = V();
+  detail::non_propagating<reading> reading_;
+};
+
+// The grapheme clusters of text in any UTF, each a grapheme of its own: read
+// whole into the view when it is stepped to, from each code unit read once,
+// and given out as a reference to it until the next -- a copy is the
+// caller's to keep. What graphemes gives over text read once, and over any
+// text asked with owning<>.
+template <std::ranges::view V,
+          std::size_t Inline = 32 / sizeof(detail::unit_of<V>)>
+  requires utf_range<V>
+class owning_grapheme_view
+    : public std::ranges::view_interface<owning_grapheme_view<V, Inline>> {
+  using Unit = detail::unit_of<V>;
+  using I = std::ranges::iterator_t<V>;
+  using S = std::ranges::sentinel_t<V>;
+
+  // Where the reading is, and the cluster read last.
+  struct reading : detail::code_point_reader<Unit, I, S> {
+    using detail::code_point_reader<Unit, I, S>::code_point_reader;
+
+    detail::cluster_rules rules{};
+    grapheme<Unit, Inline> current;
+    bool done = false;
+
+    // The next cluster, into `current`: the code point read ahead, and every
+    // one after it that goes on with it.
+    constexpr void next_cluster() {
+      current.clear();
+      if (this->count == 0) {
+        done = true;
+        return;
+      }
+      for (;;) {
+        current.append(this->units.data(), this->count);
+        const std::optional<char32_t> code_point = this->read();
+        if (!code_point)
+          return;
+        if (!rules.joins(*code_point)) {
+          rules = detail::cluster_rules(*code_point);
+          return;
+        }
+      }
+    }
+  };
+
+ public:
+  class iterator {
+   public:
+    using value_type = grapheme<Unit, Inline>;
+    using difference_type = std::ptrdiff_t;
+
+    iterator() = default;
+    constexpr explicit iterator(reading* at) noexcept : at_(at) {}
+
+    constexpr const value_type& operator*() const noexcept {
+      return at_->current;
+    }
+    constexpr iterator& operator++() {
+      at_->next_cluster();
+      return *this;
+    }
+    constexpr void operator++(int) { at_->next_cluster(); }
+    friend constexpr bool operator==(const iterator& one,
+                                     std::default_sentinel_t) noexcept {
+      return one.at_->done;
+    }
+
+   private:
+    reading* at_ = nullptr;
+  };
+
+  owning_grapheme_view()
+    requires std::default_initializable<V>
+  = default;
+  constexpr explicit owning_grapheme_view(V base) : base_(std::move(base)) {}
+
+  constexpr V base() const&
+    requires std::copy_constructible<V>
+  {
+    return base_;
+  }
+  constexpr V base() && { return std::move(base_); }
+
+  constexpr iterator begin() {
+    reading& at =
+        reading_.emplace(std::ranges::begin(base_), std::ranges::end(base_));
+    if (const std::optional<char32_t> first = at.read())
+      at.rules = detail::cluster_rules(*first);
+    at.next_cluster();
+    return iterator(&at);
+  }
+  constexpr std::default_sentinel_t end() const noexcept { return {}; }
+
+ private:
+  V base_ = V();
+  detail::non_propagating<reading> reading_;
+};
+
+// text | graphemes, or graphemes(text): over text that can be read more than
+// once, pieces of it; over text read once, graphemes of their own. And
+// text | graphemes(owning<>), or graphemes(text, owning<>): graphemes of
+// their own over any text.
 struct graphemes_fn : std::ranges::range_adaptor_closure<graphemes_fn> {
   template <std::ranges::viewable_range Range>
     requires utf_range<Range>
   constexpr auto operator()(Range&& range) const {
-    return grapheme_view<detail::all_of_t<Range>>(
+    using View = detail::all_of_t<Range>;
+    if constexpr (std::ranges::forward_range<View>)
+      return grapheme_view<View>(detail::all_of(std::forward<Range>(range)));
+    else
+      return owning_grapheme_view<View>(
+          detail::all_of(std::forward<Range>(range)));
+  }
+
+  template <std::ranges::viewable_range Range, std::size_t Inline>
+    requires utf_range<Range>
+  constexpr auto operator()(Range&& range, owning_t<Inline>) const {
+    using View = detail::all_of_t<Range>;
+    constexpr std::size_t units = Inline == std::dynamic_extent
+                                      ? 32 / sizeof(detail::unit_of<View>)
+                                      : Inline;
+    return owning_grapheme_view<View, units>(
         detail::all_of(std::forward<Range>(range)));
+  }
+
+  template <std::size_t Inline>
+  constexpr auto operator()(owning_t<Inline>) const noexcept {
+    return detail::with_option<graphemes_fn, owning_t<Inline>>{};
   }
 };
 inline constexpr graphemes_fn graphemes{};
 
+// text | lazy_graphemes, or lazy_graphemes(text).
+struct lazy_graphemes_fn
+    : std::ranges::range_adaptor_closure<lazy_graphemes_fn> {
+  template <std::ranges::viewable_range Range>
+    requires utf_range<Range>
+  constexpr auto operator()(Range&& range) const {
+    return lazy_grapheme_view<detail::all_of_t<Range>>(
+        detail::all_of(std::forward<Range>(range)));
+  }
+};
+inline constexpr lazy_graphemes_fn lazy_graphemes{};
+
 }  // namespace alef
 
-// Only over text read more than once: over text read once, the clusters are
-// read through the view.
+// Pieces of the text, which outlive the view.
 template <class V>
 inline constexpr bool std::ranges::enable_borrowed_range<alef::grapheme_view<V>> =
-    std::ranges::forward_range<V> && std::ranges::enable_borrowed_range<V>;
+    std::ranges::enable_borrowed_range<V>;

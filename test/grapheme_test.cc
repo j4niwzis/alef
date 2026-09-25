@@ -87,13 +87,15 @@ constexpr std::vector<std::size_t> forwards(std::u8string_view text) {
   return boundaries(text);
 }
 
-// Reading the text once, and counting what each cluster gives out. Nothing,
-// if what they gave out is not the text.
-template <class Unit>
-constexpr std::vector<std::size_t> read_once(std::basic_string_view<Unit> text) {
+// The boundaries `adaptor` finds in `source` -- `text`, or a way of reading
+// it -- counted from what each cluster gives out; none, if what they gave out
+// is not the text.
+template <class Unit, class Source, class Adaptor>
+constexpr std::vector<std::size_t> counted(std::basic_string_view<Unit> text,
+                                           Source source, Adaptor adaptor) {
   std::vector<std::size_t> found{0};
   std::basic_string<Unit> again;
-  for (auto&& cluster : once(text) | alef::graphemes) {
+  for (auto&& cluster : std::move(source) | adaptor) {
     for (const Unit unit : cluster)
       again.push_back(unit);
     found.push_back(again.size());
@@ -101,6 +103,19 @@ constexpr std::vector<std::size_t> read_once(std::basic_string_view<Unit> text) 
   if (again != text)
     found.clear();
   return found;
+}
+
+// Every way there is of reading text once finds what reading it more than
+// once does: lazily; owned, by default and when asked; and owned in no room
+// at all, on the heap, or in almost none.
+template <class Unit>
+constexpr bool the_same_read_once(std::basic_string_view<Unit> text) {
+  const std::vector<std::size_t> expected = boundaries(text);
+  return counted(text, once(text), alef::lazy_graphemes) == expected &&
+         counted(text, once(text), alef::graphemes) == expected &&
+         counted(text, text, alef::graphemes(alef::owning<>)) == expected &&
+         counted(text, once(text), alef::graphemes(alef::owning<0>)) == expected &&
+         counted(text, text, alef::graphemes(alef::owning<1>)) == expected;
 }
 
 constexpr std::vector<std::size_t> backwards(std::u8string_view text) {
@@ -226,8 +241,7 @@ CONSTEXPR_TEST(GraphemeBreakTest, EveryLineInUtf16AndUtf32) {
 
 CONSTEXPR_TEST(GraphemeBreakTest, EveryLineReadOnce) {
   CONSTEXPR_EXPECT_EQ(lines_where([](const example& one) {
-                        return read_once(std::u8string_view(one.text)) ==
-                               one.boundaries;
+                        return the_same_read_once(std::u8string_view(one.text));
                       }),
                       "");
 }
@@ -239,10 +253,8 @@ CONSTEXPR_TEST(GraphemeBreakTest, EveryLineReadOnceInUtf16AndUtf32) {
             one.text | alef::as_utf16 | std::ranges::to<std::u16string>();
         const auto in_utf32 =
             one.text | alef::as_utf32 | std::ranges::to<std::u32string>();
-        return read_once(std::u16string_view(in_utf16)) ==
-                   boundaries(std::u16string_view(in_utf16)) &&
-               read_once(std::u32string_view(in_utf32)) ==
-                   boundaries(std::u32string_view(in_utf32));
+        return the_same_read_once(std::u16string_view(in_utf16)) &&
+               the_same_read_once(std::u32string_view(in_utf32));
       }),
       "");
 }
@@ -282,7 +294,7 @@ CONSTEXPR_TEST(Graphemes, RandomTextTheSameEveryWay) {
     const std::vector<std::size_t> found = forwards(text);
     if (backwards(text) != found || everywhere(text) != found ||
         reversed(text) != found || !same_in_utf16_and_utf32(text) ||
-        read_once(std::u8string_view(text)) != found)
+        !the_same_read_once(std::u8string_view(text)))
       wrong = hex(text);
   }
   CONSTEXPR_EXPECT_EQ(wrong, "");
@@ -343,27 +355,108 @@ CONSTEXPR_TEST(Graphemes, TemporaryStringIsKept) {
                       2);
 }
 
-// Text read once: a cluster not read to its end is read past when the next
-// one is asked for, and the view is an input range and no more.
-CONSTEXPR_TEST(Graphemes, TextReadOnce) {
+// Lazily: a cluster not read to its end is read past when the next one is
+// asked for, and the view is an input range and no more.
+CONSTEXPR_TEST(Graphemes, LazilyOneAtATime) {
   constexpr std::u8string_view text =
       u8"e\U00000301\U0001F9D1\U0000200D\U0001F4BBx";
-  using read_once_view = decltype(once(text) | alef::graphemes);
-  CONSTEXPR_EXPECT_TRUE(std::ranges::input_range<read_once_view>);
-  CONSTEXPR_EXPECT_FALSE(std::ranges::forward_range<read_once_view>);
-  CONSTEXPR_EXPECT_EQ(std::ranges::distance(once(text) | alef::graphemes), 3);
+  using lazy = decltype(once(text) | alef::lazy_graphemes);
+  CONSTEXPR_EXPECT_TRUE(std::ranges::input_range<lazy>);
+  CONSTEXPR_EXPECT_FALSE(std::ranges::forward_range<lazy>);
+  CONSTEXPR_EXPECT_EQ(std::ranges::distance(once(text) | alef::lazy_graphemes), 3);
   std::u8string firsts;
-  for (auto&& cluster : once(text) | alef::graphemes)
+  for (auto&& cluster : once(text) | alef::lazy_graphemes)
     firsts.push_back(*cluster.begin());
   CONSTEXPR_EXPECT_TRUE(firsts == std::u8string{u8'e', char8_t(0xF0), u8'x'});
 }
 
-// A stream, which is not for the compiler to read.
+// What each way gives out: pieces of text read more than once; graphemes of
+// their own for text read once, or when asked, with room in them for 32
+// bytes' worth of the text's UTF unless said otherwise.
+CONSTEXPR_TEST(Graphemes, WhatEachWayGivesOut) {
+  using piece = std::ranges::subrange<std::ranges::iterator_t<std::u8string_view>>;
+  CONSTEXPR_EXPECT_TRUE(std::same_as<
+      std::ranges::range_value_t<decltype(std::u8string_view() | alef::graphemes)>,
+      piece>);
+  CONSTEXPR_EXPECT_TRUE(std::same_as<
+      std::ranges::range_reference_t<decltype(once(std::u8string_view()) | alef::graphemes)>,
+      const alef::grapheme<char8_t>&>);
+  CONSTEXPR_EXPECT_TRUE(std::same_as<
+      std::ranges::range_value_t<decltype(std::u8string_view() | alef::graphemes(alef::owning<>))>,
+      alef::grapheme<char8_t, 32>>);
+  CONSTEXPR_EXPECT_TRUE(std::same_as<
+      std::ranges::range_value_t<decltype(std::u16string_view() | alef::graphemes(alef::owning<>))>,
+      alef::grapheme<char16_t, 16>>);
+  CONSTEXPR_EXPECT_TRUE(std::same_as<
+      std::ranges::range_value_t<decltype(std::u32string_view() | alef::graphemes(alef::owning<>))>,
+      alef::grapheme<char32_t, 8>>);
+  CONSTEXPR_EXPECT_TRUE(std::same_as<
+      std::ranges::range_value_t<decltype(alef::graphemes(std::u8string_view(), alef::owning<4>))>,
+      alef::grapheme<char8_t, 4>>);
+  CONSTEXPR_EXPECT_FALSE(std::ranges::forward_range<
+      decltype(std::u8string_view() | alef::graphemes(alef::owning<>))>);
+}
+
+CONSTEXPR_TEST(Graphemes, OwnedFromTextReadOnce) {
+  constexpr std::u8string_view text =
+      u8"e\U00000301\U0001F9D1\U0000200D\U0001F4BBx";
+  std::vector<alef::grapheme<char8_t>> clusters;
+  for (const auto& cluster : once(text) | alef::graphemes)
+    clusters.push_back(cluster);
+  CONSTEXPR_EXPECT_EQ(clusters.size(), 3u);
+  CONSTEXPR_EXPECT_TRUE(clusters.size() == 3 &&
+                        clusters[0] == u8"e\U00000301" &&
+                        clusters[1] == u8"\U0001F9D1\U0000200D\U0001F4BB" &&
+                        clusters[2] == u8"x");
+  CONSTEXPR_EXPECT_TRUE(clusters.size() == 3 && clusters[1].is_inline());
+}
+
+// Text that is expensive to read: owned, each code unit of it is read once.
+CONSTEXPR_TEST(Graphemes, OwnedReadEachCodeUnitOnce) {
+  constexpr std::u8string_view text =
+      u8"e\U00000301\U0001F9D1\U0000200D\U0001F4BBx";
+  std::size_t reads = 0;
+  const auto expensive = text | std::views::transform([&reads](char8_t unit) {
+                           ++reads;
+                           return unit;
+                         });
+  std::size_t units = 0;
+  for (const auto& cluster : expensive | alef::graphemes(alef::owning<>))
+    units += cluster.size();
+  CONSTEXPR_EXPECT_EQ(units, text.size());
+  CONSTEXPR_EXPECT_EQ(reads, text.size());
+}
+
+CONSTEXPR_TEST(Graphemes, AGraphemeOfItsOwn) {
+  CONSTEXPR_EXPECT_EQ(alef::grapheme<char8_t>::inline_capacity, 32u);
+  CONSTEXPR_EXPECT_EQ(alef::grapheme<char16_t>::inline_capacity, 16u);
+  CONSTEXPR_EXPECT_EQ(alef::grapheme<char32_t>::inline_capacity, 8u);
+  const alef::grapheme<char8_t, 4> small(u8"e\U00000301");
+  CONSTEXPR_EXPECT_TRUE(small.is_inline());
+  alef::grapheme<char8_t, 4> big(u8"\U0001F9D1\U0000200D\U0001F4BB");
+  CONSTEXPR_EXPECT_FALSE(big.is_inline());
+  CONSTEXPR_EXPECT_EQ(big.size(), 11u);
+  const alef::grapheme<char8_t, 4> copied = big;
+  CONSTEXPR_EXPECT_TRUE(copied == big);
+  const alef::grapheme<char8_t, 4> moved = std::move(big);
+  CONSTEXPR_EXPECT_TRUE(moved == copied);
+  CONSTEXPR_EXPECT_TRUE(big.empty());
+  CONSTEXPR_EXPECT_TRUE(small < copied);
+  CONSTEXPR_EXPECT_TRUE(std::u8string_view(small) == u8"e\U00000301");
+}
+
+// A stream, which is not for the compiler to read: owned by default, and
+// lazily when asked.
 TEST(Graphemes, TextReadFromAStream) {
-  std::istringstream stream("e\xCC\x81" "x\r\n");
-  stream >> std::noskipws;
-  std::vector<std::string> clusters;
-  for (auto&& cluster : std::views::istream<char>(stream) | alef::graphemes)
-    clusters.push_back(cluster | std::ranges::to<std::string>());
-  EXPECT_EQ(clusters, (std::vector<std::string>{"e\xCC\x81", "x", "\r\n"}));
+  const auto read = [](auto adaptor) {
+    std::istringstream stream("e\xCC\x81" "x\r\n");
+    stream >> std::noskipws;
+    std::vector<std::string> clusters;
+    for (auto&& cluster : std::views::istream<char>(stream) | adaptor)
+      clusters.push_back(cluster | std::ranges::to<std::string>());
+    return clusters;
+  };
+  const std::vector<std::string> expected{"e\xCC\x81", "x", "\r\n"};
+  EXPECT_EQ(read(alef::graphemes), expected);
+  EXPECT_EQ(read(alef::lazy_graphemes), expected);
 }

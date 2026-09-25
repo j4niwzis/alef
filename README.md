@@ -27,10 +27,17 @@ later. All of it is constexpr.
   `well_formed()` says whether that code point was read or replaced.
   `alef::is_well_formed` says whether all of some text is.
 - **Grapheme clusters** (UAX #29, extended). `alef::graphemes` is a view of
-  the clusters of text in any UTF, each a `std::ranges::subrange` of the
-  text, and bidirectional if the text is. Text that can be read only once
-  comes apart too: each cluster is then a range that reads its code units
-  from the text as they are asked for, one cluster at a time. `alef::next_grapheme_boundary`, `alef::prev_grapheme_boundary`
+  the clusters of text in any UTF. Over text that can be read more than
+  once, each is a `std::ranges::subrange` of it, and the view is
+  bidirectional if the text is. Over text read once, a stream say, each is an
+  `alef::grapheme` of its own: its code units, kept in the object up to 32
+  bytes' worth and on the heap past that. `text | alef::graphemes(alef::owning<>)`
+  asks for those over any text -- text expensive to read more than once, or
+  at all, whose every code unit is then read once -- and `alef::owning<N>`
+  says how many code units to keep inline. `alef::lazy_graphemes` goes one
+  cluster at a time, each a range that reads its code units from the text as
+  they are asked for: a cluster of any length in the same few bytes, for text
+  nobody vouches for. `alef::next_grapheme_boundary`, `alef::prev_grapheme_boundary`
   and `alef::is_grapheme_boundary` work on iterators into the text, and the
   properties the rules are decided by are there too:
   `alef::grapheme_cluster_break_of`, `alef::indic_conjunct_break_of` and
