@@ -49,11 +49,19 @@ later. All of it is constexpr.
   same text in UTF-16 and UTF-32 comes apart into the same clusters.
 
 `import alef;` is all of it, and each part is a module of its own as well --
-`alef.utf`, `alef.grapheme`, `alef.normalization` -- with a CMake target of
-its own: `alef::utf`, `alef::grapheme`, `alef::normalization`, and
-`alef::alef` for all. Each table is a module of its
+`alef.utf`, `alef.grapheme`, `alef.word`, `alef.normalization` -- with a
+CMake target of its own: `alef::utf`, `alef::grapheme`, `alef::word`,
+`alef::normalization`, and `alef::alef` for all. Each table is a module of its
 own too, importing nothing of the library but the reader of the UCD, so a
 change to the library does not compile a table again.
+- **Words** (UAX #29, word boundaries). `alef::words` is a view of the
+  pieces between word boundaries of text in any UTF -- words, and the spaces
+  and punctuation between them -- each a `std::ranges::subrange` of the text,
+  and bidirectional if the text is. `alef::next_word_boundary`,
+  `alef::prev_word_boundary`, `alef::is_word_boundary` and
+  `alef::word_break_of` are there too. Checked against every line of
+  `WordBreakTest.txt` forwards, backwards and at every byte, and in UTF-16
+  and UTF-32.
 - **Normalization** (UAX #15). `alef::as_nfc`, `alef::as_nfd`,
   `alef::as_nfkc` and `alef::as_nfkd` read text in any UTF and give it in the
   form as code points -- `| alef::as_utf8` makes it UTF-8 again -- a piece at
