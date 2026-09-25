@@ -49,9 +49,9 @@ later. All of it is constexpr.
   same text in UTF-16 and UTF-32 comes apart into the same clusters.
 
 `import alef;` is all of it, and each part is a module of its own as well --
-`alef.utf`, `alef.grapheme`, `alef.word`, `alef.sentence`, `alef.identifier`, `alef.caseless`, `alef.confusable`, `alef.normalization`,
+`alef.utf`, `alef.grapheme`, `alef.word`, `alef.sentence`, `alef.identifier`, `alef.caseless`, `alef.confusable`, `alef.punycode`, `alef.precis`, `alef.idna`, `alef.normalization`,
 `alef.properties`, `alef.casing`, `alef.line`, `alef.bidi` -- with a CMake
-target of its own: `alef::utf`, `alef::grapheme`, `alef::word`, `alef::sentence`, `alef::identifier`, `alef::caseless`, `alef::confusable`,
+target of its own: `alef::utf`, `alef::grapheme`, `alef::word`, `alef::sentence`, `alef::identifier`, `alef::caseless`, `alef::confusable`, `alef::punycode`, `alef::precis`, `alef::idna`,
 `alef::normalization`, `alef::properties`, `alef::casing`, `alef::line`,
 `alef::bidi`, and `alef::alef` for all. Each table is a module of its own
 too, importing nothing of the library but the reader of the UCD, so a
@@ -95,6 +95,25 @@ change to the library does not compile a table again.
   lazily NFD, less what is Default_Ignorable_Code_Point, each code point's
   prototype from `confusables.txt`, NFD again. Every mapping of the file is
   checked to come out confusable. `alef::is_default_ignorable` is there too.
+- **String preparation** (PRECIS, RFC 8264 and RFC 8265).
+  `alef::prepare_username(text)` prepares and checks a username by the
+  UsernameCaseMapped profile -- fullwidth and halfwidth forms mapped, lower
+  case, NFC, the Bidi Rule of RFC 5893, only what the IdentifierClass
+  allows -- and gives the string to compare, or nothing where it is not a
+  username; `prepare_username(text, false)` keeps case
+  (UsernameCasePreserved). `alef::prepare_opaque_string(text)` does the same
+  for passwords and other free-form strings by the OpaqueString profile.
+  Beneath them: `alef::precis_property_of` and `alef::idna_property_of`, the
+  derived property values of RFC 8264 and RFC 5892; `alef::context_rule_holds`,
+  the contextual rules of RFC 5892, appendix A; `alef::satisfies_bidi_rule`.
+  Checked against the examples of RFC 8265.
+- **Domain names** (IDNA2008, RFC 5890 to 5895). `alef::idna_to_ascii`
+  turns a domain name in any UTF into ASCII -- `bücher.de` into
+  `xn--bcher-kva.de` -- after the mapping of RFC 5895, checking every label
+  by RFC 5891 and 5892 and the Bidi Rule across the name, and gives nothing
+  where the name is not valid; `alef::idna_to_unicode` goes the other way.
+  `alef::punycode_encode` and `alef::punycode_decode` are RFC 3492's
+  Punycode, checked against the RFC's sample strings.
 - **General properties and width.** `alef::general_category_of`,
   `alef::east_asian_width_of`, `alef::script_of` and
   `alef::script_extensions_of`. A script is `alef::script`, found by its
