@@ -1,6 +1,6 @@
 # alef
 
-Unicode for C++23: text in any of the UTFs, read lazily, and the Unicode
+Unicode for C++26: text in any of the UTFs, read lazily, and the Unicode
 Character Database read as it is published.
 
 Nothing is generated. `ucd/` holds files of the UCD 18.0.0 exactly as the
@@ -219,7 +219,7 @@ void show(std::string_view text) {
 
 ## Building
 
-CMake 4.3.4 or newer, Ninja, and a compiler that builds C++23 modules with
+CMake 4.3.4 or newer, Ninja, and a compiler that builds C++26 modules with
 `import std` and has `#embed`. CI builds with clang 23 and libc++; clang 22
 builds it as well.
 

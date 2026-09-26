@@ -7,7 +7,7 @@ cmake_minimum_required(VERSION 4.3.4 FATAL_ERROR)
 # constexpr code reads them while the module interface is compiled. A new
 # version of Unicode is new files in ucd/ and nothing else.
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/import-std.cmake)
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 project(alef VERSION 0.1 LANGUAGES CXX)
@@ -27,7 +27,7 @@ function(alef_module target file)
   add_library(${target})
   target_sources(${target}
     PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES ${file})
-  target_compile_features(${target} PUBLIC cxx_std_23)
+  target_compile_features(${target} PUBLIC cxx_std_26)
   if(ARGN)
     target_link_libraries(${target} PUBLIC ${ARGN})
   endif()
