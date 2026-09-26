@@ -23,97 +23,127 @@ set(ALEF_CONSTEXPR_STEPS 100000000 CACHE STRING
 # its own that imports nothing of the library but alef.ucd, the reader of the
 # UCD, so a table is compiled again when its files or that reader change,
 # and not when the code that looks things up in it does.
-function(alef_module target file)
-  add_library(${target})
-  target_sources(${target}
-    PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES ${file})
-  target_compile_features(${target} PUBLIC cxx_std_26)
-  if(ARGN)
-    target_link_libraries(${target} PUBLIC ${ARGN})
+# ---- One library, and what of it is built ----
+#
+# alef is one target: libalef.a, with its modules in one file set. Modules
+# are what separates it; archives did not need to as well. What is built is
+# chosen by component, the way a consumer asks for it:
+#
+#   cme_find_package(alef COMPONENTS precis idna)
+#
+# A component brings what it imports -- precis brings normalization, casing,
+# properties, identifier, bidi and their tables -- and a build that asks for
+# nothing builds all of it, as does alef's own. The components are declared
+# below as cme features, so that a consumer's COMPONENTS reach this file as
+# CME_FEATURES_alef before anything is declared; ALEF_COMPONENTS says the
+# same by hand.
+
+# What each component needs besides itself: other components, then tables.
+set(alef_components
+  grapheme normalization word sentence identifier properties casing caseless
+  confusable punycode precis idna line bidi)
+set(alef_needs_grapheme "")
+set(alef_needs_normalization "")
+set(alef_needs_word "")
+set(alef_needs_sentence "")
+set(alef_needs_identifier "")
+set(alef_needs_properties grapheme)
+set(alef_needs_casing word)
+set(alef_needs_caseless casing normalization)
+set(alef_needs_confusable normalization identifier)
+set(alef_needs_punycode "")
+set(alef_needs_precis normalization casing properties identifier bidi)
+set(alef_needs_idna normalization casing properties punycode precis)
+set(alef_needs_line "")
+set(alef_needs_bidi "")
+set(alef_tables_grapheme grapheme)
+set(alef_tables_normalization normalization)
+set(alef_tables_word word)
+set(alef_tables_sentence sentence)
+set(alef_tables_identifier identifier)
+set(alef_tables_properties general_category east_asian_width script width)
+set(alef_tables_casing casing normalization)
+set(alef_tables_caseless nfkc_casefold)
+set(alef_tables_confusable confusable)
+set(alef_tables_punycode "")
+set(alef_tables_precis general_category preparation)
+set(alef_tables_idna general_category)
+set(alef_tables_line line)
+set(alef_tables_bidi bidi)
+
+if(COMMAND cme_port_feature)
+  foreach(component IN LISTS alef_components)
+    cme_port_feature(alef ${component} SUMMARY "alef.${component} and what it imports")
+  endforeach()
+endif()
+
+set(ALEF_COMPONENTS "" CACHE STRING
+  "The components of alef to build, as a list; empty for all of them")
+set(alef_asked ${ALEF_COMPONENTS})
+if(DEFINED CME_FEATURES_alef)
+  list(APPEND alef_asked ${CME_FEATURES_alef})
+endif()
+list(REMOVE_DUPLICATES alef_asked)
+foreach(component IN LISTS alef_asked)
+  if(NOT component IN_LIST alef_components)
+    message(FATAL_ERROR
+      "alef has no component ${component}; it has ${alef_components}")
   endif()
-  # Said on every module, so that every one of them and everything that
-  # imports any of them compiles with the same bound; see below.
-  target_compile_options(${target} PUBLIC
-    $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${ALEF_CONSTEXPR_STEPS}>
-    # clang 23 evaluates constant expressions with its new interpreter by
-    # default, and on the tables -- the UCD parsed while compiled -- it is
-    # about twice as slow as the old one, which clang 22 uses: 19 s against
-    # 9 s for the sentence table. Asked for the old one outright; clang 22
-    # knows no such flag, and needs none.
-    $<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,23>>:-fno-experimental-new-constant-interpreter>)
-endfunction()
+endforeach()
+if(NOT alef_asked)
+  set(alef_asked ${alef_components})
+endif()
 
-alef_module(alef_ucd src/ucd.cc)
-alef_module(alef_tables_grapheme src/tables/grapheme.cc alef_ucd)
-alef_module(alef_tables_normalization src/tables/normalization.cc alef_ucd)
-alef_module(alef_tables_word src/tables/word.cc alef_ucd)
-alef_module(alef_tables_sentence src/tables/sentence.cc alef_ucd)
-alef_module(alef_tables_identifier src/tables/identifier.cc alef_ucd)
-alef_module(alef_tables_confusable src/tables/confusable.cc)
-alef_module(alef_tables_preparation src/tables/preparation.cc alef_ucd)
-alef_module(alef_tables_nfkc_casefold src/tables/nfkc_casefold.cc)
-alef_module(alef_tables_general_category src/tables/general_category.cc alef_ucd)
-alef_module(alef_tables_east_asian_width src/tables/east_asian_width.cc alef_ucd)
-alef_module(alef_tables_script src/tables/script.cc alef_ucd)
-alef_module(alef_tables_width src/tables/width.cc alef_ucd)
-alef_module(alef_tables_casing src/tables/casing.cc alef_ucd)
-alef_module(alef_tables_line src/tables/line.cc alef_ucd)
-alef_module(alef_tables_bidi src/tables/bidi.cc alef_ucd)
-alef_module(alef_utf src/utf.cc)
-alef_module(alef_grapheme src/grapheme.cc alef_utf alef_tables_grapheme)
-alef_module(alef_normalization src/normalization.cc
-  alef_utf alef_tables_normalization)
-alef_module(alef_word src/word.cc alef_utf alef_tables_word)
-alef_module(alef_sentence src/sentence.cc alef_utf alef_tables_sentence)
-alef_module(alef_identifier src/identifier.cc alef_utf alef_tables_identifier)
-alef_module(alef_properties src/properties.cc alef_utf alef_grapheme
-  alef_tables_general_category alef_tables_east_asian_width alef_tables_script
-  alef_tables_width)
-alef_module(alef_casing src/casing.cc alef_utf alef_word alef_tables_casing
-  alef_tables_normalization)
-alef_module(alef_caseless src/caseless.cc alef_utf alef_casing alef_normalization
-  alef_tables_nfkc_casefold)
-alef_module(alef_confusable src/confusable.cc alef_utf alef_normalization alef_identifier alef_tables_confusable)
-alef_module(alef_punycode src/punycode.cc)
-alef_module(alef_precis src/precis.cc alef_utf alef_normalization alef_casing alef_properties
-  alef_identifier alef_bidi alef_tables_general_category alef_tables_preparation)
-alef_module(alef_idna src/idna.cc alef_utf alef_normalization alef_casing alef_properties
-  alef_punycode alef_precis alef_tables_general_category)
-alef_module(alef_line src/line.cc alef_utf alef_tables_line)
-alef_module(alef_bidi src/bidi.cc alef_utf alef_tables_bidi)
-alef_module(alef src/alef.cc alef_utf alef_grapheme alef_normalization alef_word alef_sentence alef_identifier alef_caseless alef_confusable alef_punycode alef_precis alef_idna
-  alef_properties alef_casing alef_line alef_bidi)
+# What was asked for, and everything it needs.
+set(alef_built "")
+set(alef_pending ${alef_asked})
+while(alef_pending)
+  list(POP_FRONT alef_pending component)
+  if(component IN_LIST alef_built)
+    continue()
+  endif()
+  list(APPEND alef_built ${component})
+  list(APPEND alef_pending ${alef_needs_${component}})
+endwhile()
+set(alef_tables "")
+foreach(component IN LISTS alef_built)
+  list(APPEND alef_tables ${alef_tables_${component}})
+endforeach()
+list(REMOVE_DUPLICATES alef_tables)
 
+set(alef_files src/ucd.cc src/utf.cc)
+foreach(table IN LISTS alef_tables)
+  list(APPEND alef_files src/tables/${table}.cc)
+endforeach()
+foreach(component IN LISTS alef_built)
+  list(APPEND alef_files src/${component}.cc)
+endforeach()
+# The module that imports all of it, where all of it is there.
+list(LENGTH alef_built alef_count)
+list(LENGTH alef_components alef_total)
+if(alef_count EQUAL alef_total)
+  list(APPEND alef_files src/alef.cc)
+endif()
+list(JOIN alef_built ", " alef_said)
+message(STATUS "alef: ${alef_said}")
+
+add_library(alef)
+target_sources(alef PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES ${alef_files})
+target_compile_features(alef PUBLIC cxx_std_26)
+target_compile_options(alef PUBLIC
+  $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${ALEF_CONSTEXPR_STEPS}>
+  $<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,23>>:-fno-experimental-new-constant-interpreter>)
+
+# The names the targets used to have, each the one library now: what linked
+# alef::precis links alef.
 add_library(alef::alef ALIAS alef)
-add_library(alef::utf ALIAS alef_utf)
-add_library(alef::grapheme ALIAS alef_grapheme)
-add_library(alef::normalization ALIAS alef_normalization)
-add_library(alef::word ALIAS alef_word)
-add_library(alef::sentence ALIAS alef_sentence)
-add_library(alef::identifier ALIAS alef_identifier)
-add_library(alef::caseless ALIAS alef_caseless)
-add_library(alef::confusable ALIAS alef_confusable)
-add_library(alef::punycode ALIAS alef_punycode)
-add_library(alef::precis ALIAS alef_precis)
-add_library(alef::idna ALIAS alef_idna)
-add_library(alef::properties ALIAS alef_properties)
-add_library(alef::casing ALIAS alef_casing)
-add_library(alef::line ALIAS alef_line)
-add_library(alef::bidi ALIAS alef_bidi)
-
-# Reading the UCD is constant evaluation over the whole of a file, far past
-# what a compiler lets one constant expression do by default: its default is
-# 1048576 steps in clang.
-#
-# PUBLIC, because with modules these interfaces are not compiled by these
-# targets alone. CMake compiles them again for a target whose settings differ,
-# and a consumer of an installed alef compiles them itself -- in both cases
-# with the usage requirements of alef and not with its private options. So
-# what it takes to compile the interfaces is a usage requirement, the way an
-# include directory is. What a consumer's own code gets from it is a higher
-# ceiling and nothing else. It is said by alef_module, above, on every module.
-#
-# GCC is not given one yet: what it needs has not been measured.
+foreach(name IN ITEMS utf ucd ${alef_built})
+  add_library(alef::${name} ALIAS alef)
+  add_library(alef_${name} ALIAS alef)
+endforeach()
+foreach(table IN LISTS alef_tables)
+  add_library(alef_tables_${table} ALIAS alef)
+endforeach()
 
 option(ALEF_TESTS "Build the tests" ${PROJECT_IS_TOP_LEVEL})
 if(ALEF_TESTS)
