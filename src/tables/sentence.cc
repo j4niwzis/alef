@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // The property sentence boundaries are decided by, as one table read from the
 // UCD while this interface is compiled: Sentence_Break from
 // SentenceBreakProperty.txt, one byte a code point in a table of two stages.

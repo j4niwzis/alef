@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // Line breaking: UAX #14, the Unicode Line Breaking Algorithm, for Unicode
 // 18.0.0, with the properties from the table of them.
 //

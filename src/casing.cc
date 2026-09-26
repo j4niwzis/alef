@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // Case: text in lowercase, uppercase or titlecase, and folded for comparing
 // without case -- by the full mappings of the Unicode Standard, section 3.13,
 // with the conditions of SpecialCasing.txt: Final_Sigma always, and those of

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // Punycode: RFC 3492, Bootstring for Unicode in domain names -- a string of
 // code points as a string of letters, digits and hyphens, and back.
 export module alef.punycode;

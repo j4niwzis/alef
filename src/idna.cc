@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // Internationalized domain names: IDNA2008 -- labels by the rules of RFC
 // 5891 and RFC 5892, the Bidi Rule of RFC 5893 across a domain name, and
 // Punycode between U-labels and A-labels -- with the mapping of RFC 5895

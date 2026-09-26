@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // NFKC_Casefold: each code point's mapping, read from the NFKC_CF lines of
 // DerivedNormalizationProps.txt while this interface is compiled, for
 // Unicode 18.0.0. A code point it does not list maps to itself.

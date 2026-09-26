@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // The properties line breaking is decided by (UAX #14), as one table read
 // from the UCD while this interface is compiled: Line_Break from
 // LineBreak.txt, and what some rules ask besides -- whether a code point is

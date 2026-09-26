@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // The General_Category property, as a table read from the UCD while this
 // interface is compiled: from extracted/DerivedGeneralCategory.txt, one byte
 // a code point in a table of two stages.

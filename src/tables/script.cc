@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // The Script and Script_Extensions properties, as tables read from the UCD
 // while this interface is compiled: the scripts and their names from
 // PropertyValueAliases.txt, each code point's script from Scripts.txt, and

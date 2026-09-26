@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // Identifiers: UAX #31, Unicode Identifiers and Syntax, for Unicode 18.0.0 --
 // the properties identifiers are made of, and the default identifier syntax
 // of UAX31-D1, <Start> <Continue>*, with XID_Start and XID_Continue, which

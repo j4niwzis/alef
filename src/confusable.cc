@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // Confusable text: UTS #39, Unicode Security Mechanisms, for Unicode 18.0.0 --
 // the skeleton of text, and whether two texts can be taken for each other:
 // "paypal" and "pаypal", whose second a is Cyrillic.

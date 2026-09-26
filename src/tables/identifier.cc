@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // The properties identifiers are made of, as one table read from the UCD
 // while this interface is compiled: XID_Start, XID_Continue and
 // Default_Ignorable_Code_Point from DerivedCoreProperties.txt, one byte a code point in a table of two stages.

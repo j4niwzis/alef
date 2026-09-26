@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // alef: Unicode for C++, all of it. Each part is a module of its own as
 // well -- alef.utf, alef.grapheme, alef.word, alef.sentence, alef.identifier, alef.caseless, alef.confusable, alef.punycode, alef.precis, alef.idna, alef.normalization,
 // alef.properties, alef.casing, alef.line -- for whoever wants

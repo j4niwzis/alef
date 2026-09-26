@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // The properties string preparation asks of code points, as one table read
 // from the UCD while this interface is compiled: Joining_Type from
 // extracted/DerivedJoiningType.txt, Hangul_Syllable_Type from

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // Sentence boundaries: UAX #29, Unicode Text Segmentation, for Unicode 18.0.0,
 // rules SB1 to SB998, with Sentence_Break from the table of it.
 //

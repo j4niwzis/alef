@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // Word boundaries: UAX #29, Unicode Text Segmentation, for Unicode 18.0.0,
 // with Word_Break and Extended_Pictographic from the table of them.
 //

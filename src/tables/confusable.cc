@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // The confusable mappings of UTS #39, Unicode Security Mechanisms, for
 // Unicode 18.0.0: each code point's prototype -- the string it can be taken
 // for -- read from confusables.txt while this interface is compiled.

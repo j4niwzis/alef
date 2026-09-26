@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // The Unicode Character Database, read at compile time from its own files,
 // and laid out as the tables the library looks code points up in.
 //

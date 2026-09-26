@@ -251,3 +251,10 @@ tables the new one, clang 23's default, is about twice as slow.
 
 `ucd/` is the Unicode Character Database, © Unicode, Inc., distributed under
 the Unicode License v3 (`ucd/LICENSE.txt`).
+
+## Licence
+
+GNU Affero General Public License, version 3 only (`AGPL-3.0-only`) -- the
+text is in `LICENSE`. A program that uses this library is a work based on
+it; whoever interacts with such a program over a network is offered its
+source, as the licence's section 13 says.

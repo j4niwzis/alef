@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // How many columns a code point takes where text is set in columns -- a
 // terminal, say -- as a table read from the UCD while this interface is
 // compiled, from General_Category, East_Asian_Width and Emoji_Presentation:

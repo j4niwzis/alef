@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // General properties of code points -- General_Category, Script,
 // Script_Extensions and East_Asian_Width -- and how many columns text takes
 // where it is set in columns, a terminal say.

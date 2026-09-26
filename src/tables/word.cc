@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // The properties word boundaries are decided by, as one table read from the
 // UCD while this interface is compiled: Word_Break from
 // WordBreakProperty.txt and Extended_Pictographic from emoji-data.txt, one

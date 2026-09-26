@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // Preparing strings for comparison: the PRECIS framework, RFC 8264, and its
 // profiles for usernames and passwords, RFC 8265; with what it and IDNA2008
 // share -- the derived property values of RFC 5892 and RFC 8264, the

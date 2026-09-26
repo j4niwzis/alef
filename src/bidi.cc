@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // The bidirectional algorithm: UAX #9, the Unicode Bidirectional Algorithm,
 // for Unicode 18.0.0, with the properties from the table of them.
 //

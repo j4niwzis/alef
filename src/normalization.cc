@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // Normalization: the four forms of UAX #15, Unicode Normalization Forms.
 //
 // Text in any UTF is read as code points and given out as code points in the

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // The properties the bidirectional algorithm (UAX #9) is decided by, as
 // tables read from the UCD while this interface is compiled: Bidi_Class from
 // extracted/DerivedBidiClass.txt, with the defaults its @missing lines give

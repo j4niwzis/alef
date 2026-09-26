@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // Grapheme clusters: what a reader takes for one character.
 //
 // The rules are those of UAX #29, Unicode Text Segmentation, revision 49, for

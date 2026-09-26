@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // The properties grapheme clusters are decided by, as one table read from
 // the UCD while this interface is compiled: Grapheme_Cluster_Break from
 // GraphemeBreakProperty.txt, Indic_Conjunct_Break from

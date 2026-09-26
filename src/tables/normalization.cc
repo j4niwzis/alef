@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // The tables normalization is done by, read from the UCD while this interface
 // is compiled: the Canonical_Combining_Class and the decomposition mappings
 // from UnicodeData.txt, and the quick checks and Full_Composition_Exclusion

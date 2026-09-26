@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // The UTFs: UTF-8, UTF-16 and UTF-32, read lazily and written lazily.
 //
 // Which of them some text is in, the type of its code units says: char and

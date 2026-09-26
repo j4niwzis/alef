@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // Caseless matching beyond case alone: the Unicode Standard, chapter 3,
 // D145 and D146 -- text compared ignoring case and canonical differences,
 // or ignoring case and compatibility differences too. D144, the default

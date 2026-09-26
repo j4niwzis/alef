@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // The tables case mapping is done by, read from the UCD while this interface
 // is compiled: the simple mappings of UnicodeData.txt, the unconditional
 // full mappings of SpecialCasing.txt, the folding of CaseFolding.txt, and

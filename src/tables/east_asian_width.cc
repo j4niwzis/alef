@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // The East_Asian_Width property, as a table read from the UCD while this
 // interface is compiled: from EastAsianWidth.txt, one byte a code point in a
 // table of two stages.
