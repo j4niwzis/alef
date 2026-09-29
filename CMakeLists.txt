@@ -41,7 +41,7 @@ set(ALEF_CONSTEXPR_STEPS 100000000 CACHE STRING
 # What each component needs besides itself: other components, then tables.
 set(alef_components
   grapheme normalization word sentence identifier properties casing caseless
-  confusable punycode precis idna line bidi)
+  confusable punycode precis idna line bidi emoji)
 set(alef_needs_grapheme "")
 set(alef_needs_normalization "")
 set(alef_needs_word "")
@@ -56,6 +56,7 @@ set(alef_needs_precis normalization casing properties identifier bidi)
 set(alef_needs_idna normalization casing properties punycode precis)
 set(alef_needs_line "")
 set(alef_needs_bidi "")
+set(alef_needs_emoji "")
 set(alef_tables_grapheme grapheme)
 set(alef_tables_normalization normalization)
 set(alef_tables_word word)
@@ -70,6 +71,7 @@ set(alef_tables_precis general_category preparation)
 set(alef_tables_idna general_category)
 set(alef_tables_line line)
 set(alef_tables_bidi bidi)
+set(alef_tables_emoji emoji)
 
 if(COMMAND cme_port_feature)
   foreach(component IN LISTS alef_components)

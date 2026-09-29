@@ -20,3 +20,4 @@ export import alef.properties;
 export import alef.casing;
 export import alef.line;
 export import alef.bidi;
+export import alef.emoji;

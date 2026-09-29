@@ -217,6 +217,12 @@ void show(std::string_view text) {
 }
 ```
 
+- **Emoji** (UTS #51). `alef::emoji_groups` and `alef::emoji_all` are
+  Unicode's emoji as emoji-test.txt lists them for keyboards and palettes:
+  the fully-qualified ones, in CLDR's order and groups, each with its text
+  in UTF-8, its name, and whether it is a skin tone's variant of another.
+  All of it is made while the interface is compiled.
+
 ## Building
 
 CMake 4.3.4 or newer, Ninja, and a compiler that builds C++26 modules with
@@ -251,6 +257,8 @@ tables the new one, clang 23's default, is about twice as slow.
 
 `ucd/` is the Unicode Character Database, © Unicode, Inc., distributed under
 the Unicode License v3 (`ucd/LICENSE.txt`).
+`ucd/emoji/emoji-test.txt` is UTS #51's data of the same version, under the
+same licence.
 
 ## Licence
 

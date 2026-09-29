@@ -55,9 +55,10 @@ set(alef_test_general alef_properties)
 set(alef_test_casing alef_utf alef_casing)
 set(alef_test_line alef_utf alef_line)
 set(alef_test_bidi alef_utf alef_bidi)
+set(alef_test_emoji alef_emoji)
 
 foreach(one IN ITEMS utf grapheme word sentence identifier caseless confusable preparation properties normalization general casing line
-    bidi)
+    bidi emoji)
   add_executable(alef-${one}-test ${one}_test.cc)
   target_link_libraries(alef-${one}-test PRIVATE ${alef_test_${one}} ${alef_gtest})
   add_test(NAME ${one} COMMAND alef-${one}-test)
