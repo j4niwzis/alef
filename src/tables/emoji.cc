@@ -14,6 +14,7 @@
 export module alef.tables.emoji;
 
 import std;
+import splice;
 
 export namespace alef::tables::emoji_data {
 
@@ -28,10 +29,6 @@ inline constexpr char test_bytes[] = {
 #pragma clang diagnostic pop
 #endif
 inline constexpr std::string_view text{test_bytes, sizeof test_bytes};
-
-template <class... F> struct overloaded : F... {
-  using F::operator()...;
-};
 
 constexpr std::string_view trim(std::string_view s) {
   while (!s.empty() && (s.front() == ' ' || s.front() == '\t'))
@@ -61,7 +58,7 @@ struct entry {
 // A comment, a subgroup, a blank line.
 struct other {};
 } // namespace line_kind
-using line_t = std::variant<line_kind::group, line_kind::entry, line_kind::other>;
+using line_t = splice::variant<line_kind::group, line_kind::entry, line_kind::other>;
 
 constexpr line_t line_of(std::string_view line) {
   constexpr std::string_view group_mark = "# group: ";
@@ -131,7 +128,7 @@ constexpr sizes_t count() {
   sizes_t out;
   bool kept = false, counted = false;
   each_line([&](const line_t &line) {
-    std::visit(overloaded{[&](const line_kind::group &one) {
+    splice::visit(splice::overloaded{[&](const line_kind::group &one) {
                             kept = one.kept;
                             counted = false;
                           },
@@ -173,7 +170,7 @@ constexpr table_t build() {
   bool kept = false, counted = false;
   std::string_view group_name;
   each_line([&](const line_t &line) {
-    std::visit(overloaded{[&](const line_kind::group &one) {
+    splice::visit(splice::overloaded{[&](const line_kind::group &one) {
                             kept = one.kept;
                             counted = false;
                             group_name = one.name;

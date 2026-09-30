@@ -18,6 +18,28 @@ project(alef VERSION 0.1 LANGUAGES CXX)
 set(ALEF_CONSTEXPR_STEPS 100000000 CACHE STRING
   "clang's -fconstexpr-steps for alef and what imports it")
 
+# splice: the variant and the visiting, alef's one dependency -- with alef's
+# step count and constant interpreter, so that the two share one std.
+if(NOT COMMAND cme_find_package)
+  set(CME_WITHOUT_PROVIDER ON)
+  include(${CMAKE_CURRENT_LIST_DIR}/cmake/get_cme.cmake)
+endif()
+set(SPLICE_CONSTEXPR_STEPS ${ALEF_CONSTEXPR_STEPS} CACHE STRING
+  "clang's -fconstexpr-steps for splice, as alef sets it")
+cme_declare_port(NAME splice PROVIDES splice
+  GITHUB_REPOSITORY j4niwzis/splice
+  GIT_TAG 39bc67a00185f488c989d3c18b98e5995e4dc8dd
+  LICENSE GPL-3.0-only
+  SYSTEM NEVER
+  TARGETS splice)
+cme_options(splice "SPLICE_TESTS OFF")
+cme_find_package(splice REQUIRED)
+if(TARGET splice AND NOT DEFINED ALEF_SPLICE_FLAGGED)
+  set(ALEF_SPLICE_FLAGGED ON)
+  target_compile_options(splice PUBLIC
+    $<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,23>>:-fno-experimental-new-constant-interpreter>)
+endif()
+
 # One module to a target. A change to a module compiles it again, and what
 # imports it, and nothing else -- the tables least of all: each is a module of
 # its own that imports nothing of the library but alef.ucd, the reader of the
@@ -135,6 +157,7 @@ target_compile_features(alef PUBLIC cxx_std_26)
 target_compile_options(alef PUBLIC
   $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${ALEF_CONSTEXPR_STEPS}>
   $<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,23>>:-fno-experimental-new-constant-interpreter>)
+target_link_libraries(alef PUBLIC splice)
 
 # The names the targets used to have, each the one library now: what linked
 # alef::precis links alef.
