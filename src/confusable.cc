@@ -34,7 +34,7 @@ class prototype {
 // The skeleton of text in any UTF (UTS #39, section 4), lazily: NFD, less
 // what is Default_Ignorable_Code_Point, each code point's prototype, NFD
 // again. Two texts are confusable where their skeletons are equal.
-struct skeleton_fn : std::ranges::range_adaptor_closure<skeleton_fn> {
+struct skeleton_fn : detail::adaptor_closure<skeleton_fn> {
   template <std::ranges::viewable_range Range>
     requires utf_range<Range>
   constexpr auto operator()(Range&& text) const {

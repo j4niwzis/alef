@@ -744,7 +744,7 @@ class owning_grapheme_view
 // once, pieces of it; over text read once, graphemes of their own. And
 // text | graphemes(owning<>), or graphemes(text, owning<>): graphemes of
 // their own over any text -- and owning_in_bytes<N> in place of owning<N>.
-struct graphemes_fn : std::ranges::range_adaptor_closure<graphemes_fn> {
+struct graphemes_fn : detail::adaptor_closure<graphemes_fn> {
   template <std::ranges::viewable_range Range>
     requires utf_range<Range>
   constexpr auto operator()(Range&& range) const {
@@ -788,7 +788,7 @@ inline constexpr graphemes_fn graphemes{};
 
 // text | lazy_graphemes, or lazy_graphemes(text).
 struct lazy_graphemes_fn
-    : std::ranges::range_adaptor_closure<lazy_graphemes_fn> {
+    : detail::adaptor_closure<lazy_graphemes_fn> {
   template <std::ranges::viewable_range Range>
     requires utf_range<Range>
   constexpr auto operator()(Range&& range) const {

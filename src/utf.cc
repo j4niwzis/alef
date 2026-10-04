@@ -44,6 +44,19 @@ concept utf_range =
 
 export namespace alef::detail {
 
+// Keep the range-to-adaptor operator with the exported adaptor. Clang with
+// libstdc++'s std module can lose the standard closure base's hidden friends
+// when an adaptor is imported through another module.
+template <class Derived>
+struct adaptor_closure : std::ranges::range_adaptor_closure<Derived> {
+  template <std::ranges::viewable_range Range>
+  friend constexpr auto operator|(Range&& range, const Derived& adaptor)
+      noexcept(noexcept(adaptor(std::forward<Range>(range))))
+      -> decltype(adaptor(std::forward<Range>(range))) {
+    return adaptor(std::forward<Range>(range));
+  }
+};
+
 template <class Range>
 using unit_of = std::remove_cv_t<std::ranges::range_value_t<Range>>;
 
@@ -340,7 +353,7 @@ struct code_point_reader {
 // An adaptor with an option said, as a closure: text | graphemes(owning<>).
 template <class Adaptor, class Option>
 struct with_option
-    : std::ranges::range_adaptor_closure<with_option<Adaptor, Option>> {
+    : adaptor_closure<with_option<Adaptor, Option>> {
   template <class Range>
     requires std::invocable<const Adaptor&, Range, Option>
   constexpr auto operator()(Range&& range) const {
@@ -516,7 +529,7 @@ class utf_view : public std::ranges::view_interface<utf_view<To, V>> {
 // text | as_utf8, text | as_utf16, text | as_utf32: text of any UTF, in
 // the one named.
 template <code_unit To>
-struct as_utf_fn : std::ranges::range_adaptor_closure<as_utf_fn<To>> {
+struct as_utf_fn : detail::adaptor_closure<as_utf_fn<To>> {
   template <std::ranges::viewable_range Range>
     requires utf_range<Range>
   constexpr auto operator()(Range&& range) const {

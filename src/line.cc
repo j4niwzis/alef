@@ -511,7 +511,7 @@ class line_input_view : public std::ranges::view_interface<line_input_view<V>> {
 
 // text | line_breaks, or line_breaks(text): pieces of the text read more
 // than once, and of what is kept of text read once.
-struct line_breaks_fn : std::ranges::range_adaptor_closure<line_breaks_fn> {
+struct line_breaks_fn : detail::adaptor_closure<line_breaks_fn> {
   template <std::ranges::viewable_range Range>
     requires utf_range<Range>
   constexpr auto operator()(Range&& range) const {

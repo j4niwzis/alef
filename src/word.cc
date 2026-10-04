@@ -482,7 +482,7 @@ class word_input_view : public std::ranges::view_interface<word_input_view<V>> {
 
 // text | words, or words(text): subranges of text read more than once, and
 // kept pieces of text read once.
-struct words_fn : std::ranges::range_adaptor_closure<words_fn> {
+struct words_fn : detail::adaptor_closure<words_fn> {
   template <std::ranges::viewable_range Range>
     requires utf_range<Range>
   constexpr auto operator()(Range&& range) const {

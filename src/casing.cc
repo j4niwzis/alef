@@ -393,7 +393,7 @@ class title_view : public std::ranges::view_interface<title_view<V>> {
 // text | as_lower, as_upper, as_title, as_folded; and with a language,
 // text | as_lower(casing_language::turkic).
 template <tables::casing Which>
-struct case_fn : std::ranges::range_adaptor_closure<case_fn<Which>> {
+struct case_fn : detail::adaptor_closure<case_fn<Which>> {
   casing_language language = casing_language::other;
 
   template <std::ranges::viewable_range Range>

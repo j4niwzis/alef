@@ -23,7 +23,7 @@ export namespace alef {
 // capital I, becomes I and U+0307 before folding, so it is dotless i with a
 // dot above, not i -- only the default caseless match (equal_ignoring_case)
 // folds U+0130 to i.
-struct canonical_caseless_fn : std::ranges::range_adaptor_closure<canonical_caseless_fn> {
+struct canonical_caseless_fn : detail::adaptor_closure<canonical_caseless_fn> {
   casing_language language = casing_language::other;
 
   template <std::ranges::viewable_range Range>
@@ -39,7 +39,7 @@ inline constexpr canonical_caseless_fn as_canonical_caseless{};
 
 // The key two texts are compatibility caseless equal by (D146):
 // NFKD(toCasefold(NFKD(toCasefold(NFD(X))))).
-struct compatibility_caseless_fn : std::ranges::range_adaptor_closure<compatibility_caseless_fn> {
+struct compatibility_caseless_fn : detail::adaptor_closure<compatibility_caseless_fn> {
   casing_language language = casing_language::other;
 
   template <std::ranges::viewable_range Range>
@@ -75,7 +75,7 @@ class nfkc_casefolded {
 // by its NFKC_Casefold mapping, then NFC -- case, compatibility and
 // default-ignorable differences gone at once, as UAX #31 compares
 // identifiers. Lazy, over text in any UTF.
-struct nfkc_casefold_fn : std::ranges::range_adaptor_closure<nfkc_casefold_fn> {
+struct nfkc_casefold_fn : detail::adaptor_closure<nfkc_casefold_fn> {
   template <std::ranges::viewable_range Range>
     requires utf_range<Range>
   constexpr auto operator()(Range&& text) const {

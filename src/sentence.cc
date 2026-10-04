@@ -427,7 +427,7 @@ class sentence_input_view : public std::ranges::view_interface<sentence_input_vi
 
 // text | sentences, or sentences(text): subranges of text read more than
 // once, and kept pieces of text read once.
-struct sentences_fn : std::ranges::range_adaptor_closure<sentences_fn> {
+struct sentences_fn : detail::adaptor_closure<sentences_fn> {
   template <std::ranges::viewable_range Range>
     requires utf_range<Range>
   constexpr auto operator()(Range&& range) const {

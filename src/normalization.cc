@@ -271,7 +271,7 @@ class normalize_view
 
 // text | as_nfc, or as_nfc(text); and as_nfd, as_nfkc, as_nfkd.
 template <normalization_form Form>
-struct normalize_fn : std::ranges::range_adaptor_closure<normalize_fn<Form>> {
+struct normalize_fn : detail::adaptor_closure<normalize_fn<Form>> {
   template <std::ranges::viewable_range Range>
     requires utf_range<Range>
   constexpr auto operator()(Range&& range) const {

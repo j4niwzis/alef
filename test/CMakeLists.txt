@@ -37,6 +37,10 @@ endif()
 option(ALEF_CONSTEXPR_TESTS
   "Run every CONSTEXPR_TEST while it is compiled as well" OFF)
 
+add_executable(alef-adaptor-module-test adaptor_module_test.cc)
+target_link_libraries(alef-adaptor-module-test PRIVATE alef)
+add_test(NAME adaptor-module COMMAND alef-adaptor-module-test)
+
 get_property(alef_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 
 # What each test imports, and nothing more: a change to one part of alef

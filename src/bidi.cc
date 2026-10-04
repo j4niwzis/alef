@@ -786,7 +786,7 @@ class paragraph_view : public std::ranges::view_interface<paragraph_view<V>> {
 };
 
 // text | paragraphs, or paragraphs(text).
-struct paragraphs_fn : std::ranges::range_adaptor_closure<paragraphs_fn> {
+struct paragraphs_fn : detail::adaptor_closure<paragraphs_fn> {
   template <std::ranges::viewable_range Range>
     requires utf_range<Range> && std::ranges::forward_range<detail::all_of_t<Range>>
   constexpr auto operator()(Range&& range) const {

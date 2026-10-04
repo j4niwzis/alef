@@ -10,7 +10,7 @@ include(${CMAKE_CURRENT_LIST_DIR}/cmake/import-std.cmake)
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-project(alef VERSION 0.1 LANGUAGES CXX)
+project(alef VERSION 0.1.1 LANGUAGES CXX)
 
 # The bound on the steps of one constant evaluation, for alef and for what
 # imports it: enough for the tables. The constexpr tests, which read whole
