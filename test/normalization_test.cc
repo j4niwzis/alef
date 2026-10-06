@@ -89,7 +89,7 @@ constexpr std::vector<row> part(int number, std::size_t every) {
 
 template <class Form>
 constexpr std::u32string in(const std::u32string& text, Form form) {
-  return text | form | std::ranges::to<std::u32string>();
+  return std::ranges::to<std::u32string>(text | form);
 }
 
 // What the file says of a line: c2 == NFC(c1) == NFC(c2) == NFC(c3) and
@@ -191,20 +191,14 @@ CONSTEXPR_TEST(NormalizationTest, EveryCodePointNotListedIsItself) {
 
 CONSTEXPR_TEST(Normalization, AnyUtfReadOnceAndBack) {
   const std::u8string accented = u8"e\U00000301";
-  CONSTEXPR_EXPECT_TRUE((once(std::u8string_view(accented)) | alef::as_nfc |
-                         std::ranges::to<std::u32string>()) == U"\U000000E9");
-  CONSTEXPR_EXPECT_TRUE((u8"\U000000E9" | alef::as_nfd | alef::as_utf8 |
-                         std::ranges::to<std::u8string>()) == u8"e\U00000301");
-  CONSTEXPR_EXPECT_TRUE((u"\U0000FB01" | alef::as_nfkc |
-                         std::ranges::to<std::u32string>()) == U"fi");
-  CONSTEXPR_EXPECT_TRUE((U"\U0000D55C" | alef::as_nfd |
-                         std::ranges::to<std::u32string>()) ==
+  CONSTEXPR_EXPECT_TRUE((std::ranges::to<std::u32string>(once(std::u8string_view(accented)) | alef::as_nfc)) == U"\U000000E9");
+  CONSTEXPR_EXPECT_TRUE((std::ranges::to<std::u8string>(u8"\U000000E9" | alef::as_nfd | alef::as_utf8)) == u8"e\U00000301");
+  CONSTEXPR_EXPECT_TRUE((std::ranges::to<std::u32string>(u"\U0000FB01" | alef::as_nfkc)) == U"fi");
+  CONSTEXPR_EXPECT_TRUE((std::ranges::to<std::u32string>(U"\U0000D55C" | alef::as_nfd)) ==
                         U"\U00001112\U00001161\U000011AB");
-  CONSTEXPR_EXPECT_TRUE((U"\U00001112\U00001161\U000011AB" | alef::as_nfc |
-                         std::ranges::to<std::u32string>()) == U"\U0000D55C");
+  CONSTEXPR_EXPECT_TRUE((std::ranges::to<std::u32string>(U"\U00001112\U00001161\U000011AB" | alef::as_nfc)) == U"\U0000D55C");
   // Reordered, then composed past the cedilla, whose class is lower.
-  CONSTEXPR_EXPECT_TRUE((U"a\U00000301\U00000327" | alef::as_nfc |
-                         std::ranges::to<std::u32string>()) ==
+  CONSTEXPR_EXPECT_TRUE((std::ranges::to<std::u32string>(U"a\U00000301\U00000327" | alef::as_nfc)) ==
                         U"\U000000E1\U00000327");
   CONSTEXPR_EXPECT_FALSE(alef::is_nfc("\xFF"));
 }

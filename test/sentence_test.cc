@@ -140,8 +140,8 @@ constexpr std::vector<std::ptrdiff_t> sizes(const Text& text) {
 }
 
 constexpr bool same_in_utf16_and_utf32(std::u8string_view text) {
-  const auto in_utf16 = text | alef::as_utf16 | std::ranges::to<std::u16string>();
-  const auto in_utf32 = text | alef::as_utf32 | std::ranges::to<std::u32string>();
+  const auto in_utf16 = std::ranges::to<std::u16string>(text | alef::as_utf16);
+  const auto in_utf32 = std::ranges::to<std::u32string>(text | alef::as_utf32);
   return sizes(in_utf16) == sizes(text) && sizes(in_utf32) == sizes(text);
 }
 

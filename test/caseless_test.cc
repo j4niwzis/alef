@@ -47,9 +47,9 @@ CONSTEXPR_TEST(Caseless, WithALanguage) {
 
 CONSTEXPR_TEST(Caseless, KeysAreViews) {
   // The keys themselves, for hashing or looking up.
-  CONSTEXPR_EXPECT_TRUE((u8"É" | alef::as_canonical_caseless | std::ranges::to<std::u32string>()) ==
+  CONSTEXPR_EXPECT_TRUE((std::ranges::to<std::u32string>(u8"É" | alef::as_canonical_caseless)) ==
                         U"é");
-  CONSTEXPR_EXPECT_TRUE((u8"①X" | alef::as_compatibility_caseless | std::ranges::to<std::u32string>()) ==
+  CONSTEXPR_EXPECT_TRUE((std::ranges::to<std::u32string>(u8"①X" | alef::as_compatibility_caseless)) ==
                         U"1x");
 }
 
@@ -66,7 +66,7 @@ std::u32string by_definition(char32_t code_point) {
       if (!alef::is_default_ignorable(one))
         next.push_back(one);
     if (next == text)  // toNFKC_Casefold then puts the whole string in NFC
-      return next | alef::as_nfc | std::ranges::to<std::u32string>();
+      return std::ranges::to<std::u32string>(next | alef::as_nfc);
     text = next;
   }
 }
@@ -80,8 +80,7 @@ TEST(Caseless, NfkcCasefoldOfEveryCodePoint) {
   for (char32_t code_point = 0; code_point <= 0x10FFFF; ++code_point) {
     if (code_point >= 0xD800 && code_point <= 0xDFFF)
       continue;
-    const std::u32string ours = std::u32string(1, code_point) | alef::as_nfkc_casefold |
-                                std::ranges::to<std::u32string>();
+    const std::u32string ours = std::ranges::to<std::u32string>(std::u32string(1, code_point) | alef::as_nfkc_casefold);
     if (ours != by_definition(code_point) && wrong.size() < 400) {
       char hex[16];
       std::snprintf(hex, sizeof hex, "%04X ", static_cast<unsigned>(code_point));
@@ -93,7 +92,7 @@ TEST(Caseless, NfkcCasefoldOfEveryCodePoint) {
 
 CONSTEXPR_TEST(Caseless, NfkcCasefoldByExample) {
   const auto folded = [](std::u8string_view text) {
-    return text | alef::as_nfkc_casefold | std::ranges::to<std::u32string>();
+    return std::ranges::to<std::u32string>(text | alef::as_nfkc_casefold);
   };
   CONSTEXPR_EXPECT_TRUE(folded(u8"Stra\u00DFe") == U"strasse");
   CONSTEXPR_EXPECT_TRUE(folded(u8"\u212B") == U"\u00E5");     // ANGSTROM SIGN

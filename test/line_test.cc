@@ -144,8 +144,8 @@ CONSTEXPR_TEST(LineBreakTest, EveryLineInUtf16AndUtf32) {
   CONSTEXPR_EXPECT_EQ(
       lines_where(every,
                   [](const example& one) {
-                    const auto in_utf16 = one.text | alef::as_utf16 | std::ranges::to<std::u16string>();
-                    const auto in_utf32 = one.text | alef::as_utf32 | std::ranges::to<std::u32string>();
+                    const auto in_utf16 = std::ranges::to<std::u16string>(one.text | alef::as_utf16);
+                    const auto in_utf32 = std::ranges::to<std::u32string>(one.text | alef::as_utf32);
                     const auto expected = sizes(std::u8string_view(one.text));
                     return sizes(std::u16string_view(in_utf16)) == expected &&
                            sizes(std::u32string_view(in_utf32)) == expected;

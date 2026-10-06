@@ -167,8 +167,8 @@ constexpr std::vector<std::ptrdiff_t> sizes(const Text& text) {
 }
 
 constexpr bool same_in_utf16_and_utf32(std::u8string_view text) {
-  const auto in_utf16 = text | alef::as_utf16 | std::ranges::to<std::u16string>();
-  const auto in_utf32 = text | alef::as_utf32 | std::ranges::to<std::u32string>();
+  const auto in_utf16 = std::ranges::to<std::u16string>(text | alef::as_utf16);
+  const auto in_utf32 = std::ranges::to<std::u32string>(text | alef::as_utf32);
   return sizes(in_utf16) == sizes(text) && sizes(in_utf32) == sizes(text);
 }
 
@@ -263,9 +263,9 @@ CONSTEXPR_TEST(GraphemeBreakTest, EveryLineReadOnceInUtf16AndUtf32) {
   CONSTEXPR_EXPECT_EQ(
       lines_where([](const example& one) {
         const auto in_utf16 =
-            one.text | alef::as_utf16 | std::ranges::to<std::u16string>();
+            std::ranges::to<std::u16string>(one.text | alef::as_utf16);
         const auto in_utf32 =
-            one.text | alef::as_utf32 | std::ranges::to<std::u32string>();
+            std::ranges::to<std::u32string>(one.text | alef::as_utf32);
         return the_same_read_once(std::u16string_view(in_utf16)) &&
                the_same_read_once(std::u32string_view(in_utf32));
       }),
@@ -479,7 +479,7 @@ TEST(Graphemes, TextReadFromAStream) {
     stream >> std::noskipws;
     std::vector<std::string> clusters;
     for (auto&& cluster : std::views::istream<char>(stream) | adaptor)
-      clusters.push_back(cluster | std::ranges::to<std::string>());
+      clusters.push_back(std::ranges::to<std::string>(cluster));
     return clusters;
   };
   const std::vector<std::string> expected{"e\xCC\x81", "x", "\r\n"};

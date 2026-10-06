@@ -14,8 +14,7 @@ namespace {
 
 template <class Text>
 constexpr std::u32string utf32(Text&& text) {
-  return std::forward<Text>(text) | alef::as_utf32 |
-         std::ranges::to<std::u32string>();
+  return std::ranges::to<std::u32string>(std::forward<Text>(text) | alef::as_utf32);
 }
 
 constexpr std::u32string replaced(std::size_t times) {
@@ -106,17 +105,15 @@ CONSTEXPR_TEST(Utf16, UnpairedSurrogates) {
 
 CONSTEXPR_TEST(Utf32, SurrogatesAndWhatIsPastU10FFFF) {
   const std::u32string values{U'a', char32_t(0xD800), char32_t(0x110000), U'b'};
-  CONSTEXPR_EXPECT_EQ(values | alef::as_utf8 | std::ranges::to<std::u8string>(),
+  CONSTEXPR_EXPECT_EQ(std::ranges::to<std::u8string>(values | alef::as_utf8),
                       u8"a\U0000FFFD\U0000FFFDb");
 }
 
 CONSTEXPR_TEST(Utf, FromEachToEach) {
   CONSTEXPR_EXPECT_EQ(utf32(u8"a\U000000E9\U0001F389"), U"a\U000000E9\U0001F389");
-  CONSTEXPR_EXPECT_EQ(U"a\U000000E9\U0001F389" | alef::as_utf8 |
-                          std::ranges::to<std::u8string>(),
+  CONSTEXPR_EXPECT_EQ(std::ranges::to<std::u8string>(U"a\U000000E9\U0001F389" | alef::as_utf8),
                       u8"a\U000000E9\U0001F389");
-  CONSTEXPR_EXPECT_EQ(u8"a\U0001F389" | alef::as_utf16 |
-                          std::ranges::to<std::u16string>(),
+  CONSTEXPR_EXPECT_EQ(std::ranges::to<std::u16string>(u8"a\U0001F389" | alef::as_utf16),
                       u"a\U0001F389");
   CONSTEXPR_EXPECT_EQ(std::ranges::distance(u8"a\U000000E9\U0001F389" | alef::as_utf16), 4);
   CONSTEXPR_EXPECT_EQ(std::ranges::distance("" | alef::as_utf32), 0);
@@ -136,8 +133,8 @@ CONSTEXPR_TEST(Utf, EveryScalarValueThereAndBack) {
   for (char32_t one = 0; one <= 0x10FFFF; one += step)
     if (one < 0xD800 || one > 0xDFFF)
       scalars.push_back(one);
-  const auto in_utf8 = scalars | alef::as_utf8 | std::ranges::to<std::u8string>();
-  const auto in_utf16 = in_utf8 | alef::as_utf16 | std::ranges::to<std::u16string>();
+  const auto in_utf8 = std::ranges::to<std::u8string>(scalars | alef::as_utf8);
+  const auto in_utf16 = std::ranges::to<std::u16string>(in_utf8 | alef::as_utf16);
   CONSTEXPR_EXPECT_TRUE(utf32(in_utf16) == scalars);
   CONSTEXPR_EXPECT_TRUE(alef::is_well_formed(in_utf8));
   CONSTEXPR_EXPECT_TRUE(alef::is_well_formed(in_utf16));

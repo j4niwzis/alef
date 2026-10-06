@@ -96,7 +96,7 @@ constexpr std::vector<std::vector<std::string_view>> rows(std::string_view file)
 
 template <class Form>
 constexpr std::u32string in(std::u32string_view text, Form form) {
-  return text | form | std::ranges::to<std::u32string>();
+  return std::ranges::to<std::u32string>(text | form);
 }
 
 constexpr std::string hex_of(char32_t code_point) {
@@ -212,8 +212,8 @@ CONSTEXPR_TEST(Casing, TitlecaseAndComparing) {
   CONSTEXPR_EXPECT_TRUE(alef::equal_ignoring_case(u8"Stra\U000000DFe", "STRASSE"));
   CONSTEXPR_EXPECT_FALSE(alef::equal_ignoring_case("abc", "abd"));
   // From UTF-8 read once, back to UTF-8.
-  CONSTEXPR_EXPECT_TRUE((once(std::u8string_view(u8"\U00000414\U00000430")) | alef::as_upper |
-                         alef::as_utf8 | std::ranges::to<std::u8string>()) ==
+  CONSTEXPR_EXPECT_TRUE((std::ranges::to<std::u8string>(once(std::u8string_view(u8"\U00000414\U00000430")) | alef::as_upper |
+                         alef::as_utf8)) ==
                         u8"\U00000414\U00000410");
   CONSTEXPR_EXPECT_EQ(alef::to_lower(U'A'), U'a');
   CONSTEXPR_EXPECT_EQ(alef::to_upper(U'\U000000DF'), U'\U000000DF');  // no simple one

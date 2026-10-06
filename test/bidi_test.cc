@@ -208,7 +208,7 @@ constexpr std::string bidi_character_test_failures(std::size_t every, bool in_ut
     };
     const bool passed =
         in_utf8 ? right(alef::bidi_paragraph(
-                      text | alef::as_utf8 | std::ranges::to<std::u8string>(), direction))
+                      std::ranges::to<std::u8string>(text | alef::as_utf8), direction))
                 : right(alef::bidi_paragraph(std::u32string_view(text), direction));
     if (!passed && wrong.size() < 4000)
       wrong += std::string(line) + "\n";
@@ -307,7 +307,7 @@ template <class Text>
 constexpr std::vector<std::u8string> paragraphs_in(const Text& text) {
   std::vector<std::u8string> found;
   for (const auto piece : std::basic_string_view(text) | alef::paragraphs)
-    found.push_back(piece | alef::as_utf8 | std::ranges::to<std::u8string>());
+    found.push_back(std::ranges::to<std::u8string>(piece | alef::as_utf8));
   return found;
 }
 
@@ -320,12 +320,12 @@ constexpr bool paragraphs_the_same_every_way(std::u8string_view text) {
   std::vector<std::u8string> decoded;
   for (const std::u8string& piece : found) {
     together += piece;
-    decoded.push_back(piece | alef::as_utf8 | std::ranges::to<std::u8string>());
+    decoded.push_back(std::ranges::to<std::u8string>(piece | alef::as_utf8));
   }
   if (together != text)
     return false;
-  const auto in_utf16 = text | alef::as_utf16 | std::ranges::to<std::u16string>();
-  const auto in_utf32 = text | alef::as_utf32 | std::ranges::to<std::u32string>();
+  const auto in_utf16 = std::ranges::to<std::u16string>(text | alef::as_utf16);
+  const auto in_utf32 = std::ranges::to<std::u32string>(text | alef::as_utf32);
   return paragraphs_in(in_utf16) == decoded && paragraphs_in(in_utf32) == decoded;
 }
 
