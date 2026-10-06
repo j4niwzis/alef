@@ -38,9 +38,7 @@ struct skeleton_fn : detail::adaptor_closure<skeleton_fn> {
   template <std::ranges::viewable_range Range>
     requires utf_range<Range>
   constexpr auto operator()(Range&& text) const {
-    return std::forward<Range>(text) | as_nfd |
-           std::views::filter([](char32_t one) { return !is_default_ignorable(one); }) |
-           std::views::transform([](char32_t one) { return prototype(one); }) | std::views::join |
+    return std::views::join(std::views::transform(std::views::filter(std::forward<Range>(text) | as_nfd, [](char32_t one) { return !is_default_ignorable(one); }), [](char32_t one) { return prototype(one); })) |
            as_nfd;
   }
 };

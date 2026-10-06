@@ -296,7 +296,7 @@ constexpr std::vector<std::u8string> paragraphs_of(std::u8string_view text) {
 
 constexpr std::vector<std::u8string> paragraphs_backwards(std::u8string_view text) {
   std::vector<std::u8string> found;
-  for (const auto piece : text | alef::paragraphs | std::views::reverse)
+  for (const auto piece : std::views::reverse(text | alef::paragraphs))
     found.emplace_back(piece.begin(), piece.end());
   std::ranges::reverse(found);
   return found;

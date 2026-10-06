@@ -79,8 +79,7 @@ struct nfkc_casefold_fn : detail::adaptor_closure<nfkc_casefold_fn> {
   template <std::ranges::viewable_range Range>
     requires utf_range<Range>
   constexpr auto operator()(Range&& text) const {
-    return std::forward<Range>(text) | as_utf32 |
-           std::views::transform([](char32_t one) { return nfkc_casefolded(one); }) | std::views::join |
+    return std::views::join(std::views::transform(std::forward<Range>(text) | as_utf32, [](char32_t one) { return nfkc_casefolded(one); })) |
            as_nfc;
   }
 };

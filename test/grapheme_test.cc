@@ -151,7 +151,7 @@ constexpr std::vector<std::size_t> everywhere(std::u8string_view text) {
 
 constexpr std::vector<std::size_t> reversed(std::u8string_view text) {
   std::vector<std::size_t> found{text.size()};
-  for (const auto cluster : text | alef::graphemes | std::views::reverse)
+  for (const auto cluster : std::views::reverse(text | alef::graphemes))
     found.push_back(static_cast<std::size_t>(cluster.begin() - text.begin()));
   std::ranges::reverse(found);
   return found;
@@ -336,8 +336,7 @@ CONSTEXPR_TEST(Graphemes, WhatAReaderTakesForOneCharacter) {
                             u8"\U00000915\U0000094D\U00000937" |
                             alef::graphemes),
       3);
-  CONSTEXPR_EXPECT_EQ(std::ranges::distance(u8"ae\U00000301" | alef::graphemes |
-                                            std::views::reverse),
+  CONSTEXPR_EXPECT_EQ(std::ranges::distance(std::views::reverse(u8"ae\U00000301" | alef::graphemes)),
                       2);
 }
 
@@ -442,7 +441,7 @@ CONSTEXPR_TEST(Graphemes, OwnedReadEachCodeUnitOnce) {
   constexpr std::u8string_view text =
       u8"e\U00000301\U0001F9D1\U0000200D\U0001F4BBx";
   std::size_t reads = 0;
-  const auto expensive = text | std::views::transform([&reads](char8_t unit) {
+  const auto expensive = std::views::transform(text, [&reads](char8_t unit) {
                            ++reads;
                            return unit;
                          });

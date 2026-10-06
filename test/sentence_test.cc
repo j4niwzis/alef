@@ -124,7 +124,7 @@ constexpr std::vector<std::size_t> everywhere(std::u8string_view text) {
 
 constexpr std::vector<std::size_t> reversed(std::u8string_view text) {
   std::vector<std::size_t> found{text.size()};
-  for (const auto piece : text | alef::sentences | std::views::reverse)
+  for (const auto piece : std::views::reverse(text | alef::sentences))
     found.push_back(static_cast<std::size_t>(piece.begin() - text.begin()));
   std::ranges::reverse(found);
   return found;
