@@ -58,7 +58,7 @@ struct entry {
 // A comment, a subgroup, a blank line.
 struct other {};
 } // namespace line_kind
-using line_t = splice::variant<line_kind::group, line_kind::entry, line_kind::other>;
+using line_t = spl::variant<line_kind::group, line_kind::entry, line_kind::other>;
 
 constexpr line_t line_of(std::string_view line) {
   constexpr std::string_view group_mark = "# group: ";
@@ -128,7 +128,7 @@ constexpr sizes_t count() {
   sizes_t out;
   bool kept = false, counted = false;
   each_line([&](const line_t &line) {
-    splice::visit(splice::overloaded{[&](const line_kind::group &one) {
+    spl::visit(spl::overloaded{[&](const line_kind::group &one) {
                             kept = one.kept;
                             counted = false;
                           },
@@ -170,7 +170,7 @@ constexpr table_t build() {
   bool kept = false, counted = false;
   std::string_view group_name;
   each_line([&](const line_t &line) {
-    splice::visit(splice::overloaded{[&](const line_kind::group &one) {
+    spl::visit(spl::overloaded{[&](const line_kind::group &one) {
                             kept = one.kept;
                             counted = false;
                             group_name = one.name;
