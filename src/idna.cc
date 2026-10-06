@@ -34,7 +34,7 @@ constexpr bool hyphens_fit(std::u32string_view label) noexcept {
 constexpr bool u_label(std::u32string_view label) {
   if (label.empty() || !hyphens_fit(label))
     return false;
-  if ((label | as_nfc | std::ranges::to<std::u32string>()) != label)
+  if (std::ranges::to<std::u32string>(label | as_nfc) != label)
     return false;
   const general_category first = general_category_of(label.front());
   if (first == general_category::nonspacing_mark || first == general_category::spacing_mark ||
@@ -96,8 +96,8 @@ template <class Range>
 constexpr std::optional<labels> read(Range&& text) {
   // RFC 5895: lower case, the width mapping, NFC.
   const std::u32string mapped =
-      width_mapped(std::forward<Range>(text) | as_utf32 | as_lower | std::ranges::to<std::u32string>()) |
-      as_nfc | std::ranges::to<std::u32string>();
+      std::ranges::to<std::u32string>(
+          width_mapped(std::ranges::to<std::u32string>(std::forward<Range>(text) | as_utf32 | as_lower)) | as_nfc);
   std::vector<std::u32string> parts(1);
   for (const char32_t one : mapped) {
     if (separator(one))

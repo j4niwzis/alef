@@ -44,7 +44,7 @@ constexpr bool mark(gc one) noexcept {
 constexpr std::u32string one_of(char32_t cp) { return std::u32string(1, cp); }
 
 constexpr std::u32string nfkc(std::u32string_view text) {
-  return text | as_nfkc | std::ranges::to<std::u32string>();
+  return std::ranges::to<std::u32string>(text | as_nfkc);
 }
 
 }  // namespace alef::detail::precis
@@ -140,7 +140,7 @@ constexpr derived_property idna_property_of(char32_t cp) {
   if (cp == 0x200C || cp == 0x200D)
     return contextj;  // JoinControl
   const std::u32string itself = one_of(cp);
-  if ((nfkc(itself) | as_folded | as_nfkc | std::ranges::to<std::u32string>()) != itself)
+  if (std::ranges::to<std::u32string>(nfkc(itself) | as_folded | as_nfkc) != itself)
     return disallowed;  // Unstable
   if (is_default_ignorable(cp) || white_space(cp) || noncharacter(cp))
     return disallowed;  // IgnorableProperties
@@ -292,10 +292,10 @@ constexpr bool allowed(std::u32string_view text, bool freeform) {
 template <std::ranges::viewable_range Range>
   requires utf_range<Range>
 constexpr std::optional<std::u32string> prepare_username(Range&& text, bool case_mapped = true) {
-  std::u32string out = width_mapped(std::forward<Range>(text) | as_utf32 | std::ranges::to<std::u32string>());
+  std::u32string out = width_mapped(std::ranges::to<std::u32string>(std::forward<Range>(text) | as_utf32));
   if (case_mapped)
-    out = out | as_lower | std::ranges::to<std::u32string>();
-  out = out | as_nfc | std::ranges::to<std::u32string>();
+    out = std::ranges::to<std::u32string>(out | as_lower);
+  out = std::ranges::to<std::u32string>(out | as_nfc);
   if (out.empty() || (has_right_to_left(out) && !satisfies_bidi_rule(out)) ||
       !detail::precis::allowed(out, false))
     return std::nullopt;
@@ -311,7 +311,7 @@ constexpr std::optional<std::u32string> prepare_opaque_string(Range&& text) {
   std::u32string out;
   for (const char32_t one : std::forward<Range>(text) | as_utf32)
     out.push_back(general_category_of(one) == general_category::space_separator ? U' ' : one);
-  out = out | as_nfc | std::ranges::to<std::u32string>();
+  out = std::ranges::to<std::u32string>(out | as_nfc);
   if (out.empty() || !detail::precis::allowed(out, true))
     return std::nullopt;
   return out;
