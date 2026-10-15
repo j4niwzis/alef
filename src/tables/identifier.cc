@@ -70,18 +70,33 @@ inline constexpr std::size_t blocks =
 inline constexpr auto table =
     ucd::two_stage<std::uint8_t, blocks>(ucd::lay_out(runs()));
 
+// What `table` holds, read at run time from this module's own object, where it
+// was made once; in a constant evaluation, `table` itself. A module file keeps a
+// constant's value only where it is a number (clang's
+// ASTRecordWriter::AddVarDeclInit), so a unit whose code read `table` made it
+// again from the Unicode data: 64 of a mux UI unit's 71 seconds.
+const decltype(table)& table_at_run_time() noexcept { return table; }
+constexpr const decltype(table)& table_now() noexcept {
+  if consteval {
+    return table;
+  } else {
+    return table_at_run_time();
+  }
+}
+
+
 }  // namespace alef::tables::identifier_data
 
 export namespace alef::tables {
 
 constexpr bool xid_start(char32_t code_point) noexcept {
-  return (identifier_data::table[code_point] & 1) != 0;
+  return (identifier_data::table_now()[code_point] & 1) != 0;
 }
 constexpr bool xid_continue(char32_t code_point) noexcept {
-  return (identifier_data::table[code_point] & 2) != 0;
+  return (identifier_data::table_now()[code_point] & 2) != 0;
 }
 constexpr bool default_ignorable(char32_t code_point) noexcept {
-  return (identifier_data::table[code_point] & 4) != 0;
+  return (identifier_data::table_now()[code_point] & 4) != 0;
 }
 
 }  // namespace alef::tables

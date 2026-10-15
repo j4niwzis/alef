@@ -32,25 +32,44 @@ namespace data = tables::emoji_data;
 inline constexpr std::array<emoji, data::sizes.entries> all = [] {
   std::array<emoji, data::sizes.entries> out{};
   for (std::size_t i = 0; i < out.size(); ++i) {
-    const data::place &one = data::table.places[i];
-    out[i] = {std::string_view(data::table.bytes.data() + one.offset, one.length), one.name, one.toned};
+    const data::place &one = data::table_now().places[i];
+    out[i] = {std::string_view(data::table_now().bytes.data() + one.offset, one.length), one.name, one.toned};
   }
   return out;
 }();
 inline constexpr std::array<emoji_group, data::sizes.groups> groups = [] {
   std::array<emoji_group, data::sizes.groups> out{};
   for (std::size_t g = 0; g < out.size(); ++g) {
-    const data::group_place &one = data::table.groups[g];
+    const data::group_place &one = data::table_now().groups[g];
     out[g] = {one.name, std::span<const emoji>(all.data() + one.first, one.count)};
   }
   return out;
 }();
+// The lists as read at run time: from this module's own object, where they
+// were made once. A module file keeps a constant's value only where it is a
+// number (clang's ASTRecordWriter::AddVarDeclInit), so a unit that read them
+// made them again from the file.
+std::span<const emoji> all_at_run_time() noexcept { return all; }
+std::span<const emoji_group> groups_at_run_time() noexcept { return groups; }
 } // namespace alef::emoji_detail
 
 export namespace alef {
 
-// Every emoji, in order; and the same, in their groups.
-inline constexpr std::span<const emoji> emoji_all{emoji_detail::all};
-inline constexpr std::span<const emoji_group> emoji_groups{emoji_detail::groups};
+// Every emoji, in order; and the same, in their groups. In a constant
+// evaluation, the lists themselves.
+constexpr std::span<const emoji> emoji_all() noexcept {
+  if consteval {
+    return emoji_detail::all;
+  } else {
+    return emoji_detail::all_at_run_time();
+  }
+}
+constexpr std::span<const emoji_group> emoji_groups() noexcept {
+  if consteval {
+    return emoji_detail::groups;
+  } else {
+    return emoji_detail::groups_at_run_time();
+  }
+}
 
 } // namespace alef

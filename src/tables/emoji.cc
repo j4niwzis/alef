@@ -217,4 +217,19 @@ constexpr table_t build() {
 }
 inline constexpr table_t table = build();
 
+// What `table` holds, read at run time from this module's own object, where it
+// was made once; in a constant evaluation, `table` itself. A module file keeps a
+// constant's value only where it is a number (clang's
+// ASTRecordWriter::AddVarDeclInit), so a unit whose code read `table` made it
+// again from the Unicode data: 64 of a mux UI unit's 71 seconds.
+const decltype(table)& table_at_run_time() noexcept { return table; }
+constexpr const decltype(table)& table_now() noexcept {
+  if consteval {
+    return table;
+  } else {
+    return table_at_run_time();
+  }
+}
+
+
 } // namespace alef::tables::emoji_data

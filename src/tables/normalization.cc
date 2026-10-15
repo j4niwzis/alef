@@ -329,17 +329,32 @@ inline constexpr all_tables table = [] {
   return out;
 }();
 
+// What `table` holds, read at run time from this module's own object, where it
+// was made once; in a constant evaluation, `table` itself. A module file keeps a
+// constant's value only where it is a number (clang's
+// ASTRecordWriter::AddVarDeclInit), so a unit whose code read `table` made it
+// again from the Unicode data: 64 of a mux UI unit's 71 seconds.
+const decltype(table)& table_at_run_time() noexcept { return table; }
+constexpr const decltype(table)& table_now() noexcept {
+  if consteval {
+    return table;
+  } else {
+    return table_at_run_time();
+  }
+}
+
+
 constexpr const decomposition* decomposition_of(char32_t code_point) noexcept {
-  const auto found = std::ranges::lower_bound(table.decompositions, code_point,
+  const auto found = std::ranges::lower_bound(table_now().decompositions, code_point,
                                               {}, &decomposition::code_point);
-  return found != table.decompositions.end() && found->code_point == code_point
+  return found != table_now().decompositions.end() && found->code_point == code_point
              ? &*found
              : nullptr;
 }
 
 constexpr std::u32string_view in_pool(std::uint16_t offset,
                                       std::uint8_t length) noexcept {
-  return {table.pool.data() + offset, length};
+  return {table_now().pool.data() + offset, length};
 }
 
 }  // namespace alef::tables::normalization_data
@@ -347,11 +362,11 @@ constexpr std::u32string_view in_pool(std::uint16_t offset,
 export namespace alef::tables {
 
 constexpr std::uint8_t combining_class_of(char32_t code_point) noexcept {
-  return normalization_data::table.classes[code_point];
+  return normalization_data::table_now().classes[code_point];
 }
 
 constexpr quick_checks quick_checks_of(char32_t code_point) noexcept {
-  return {normalization_data::table.checks[code_point]};
+  return {normalization_data::table_now().checks[code_point]};
 }
 
 // The canonical decomposition of `code_point` all the way down, or nothing
@@ -386,7 +401,7 @@ constexpr std::u32string_view compatibility_decomposition(
 // What `first` and `second` compose to, where they are a primary composite's
 // canonical mapping; 0 where they are not. Hangul is not here either.
 constexpr char32_t primary_composite(char32_t first, char32_t second) noexcept {
-  const auto& all = normalization_data::table.compositions;
+  const auto& all = normalization_data::table_now().compositions;
   const auto found = std::ranges::lower_bound(
       all, std::pair(first, second), {},
       [](const normalization_data::composition& one) {

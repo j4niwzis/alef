@@ -103,17 +103,32 @@ inline constexpr laid_out table = [] {
   return out;
 }();
 
+// What `table` holds, read at run time from this module's own object, where it
+// was made once; in a constant evaluation, `table` itself. A module file keeps a
+// constant's value only where it is a number (clang's
+// ASTRecordWriter::AddVarDeclInit), so a unit whose code read `table` made it
+// again from the Unicode data: 64 of a mux UI unit's 71 seconds.
+const decltype(table)& table_at_run_time() noexcept { return table; }
+constexpr const decltype(table)& table_now() noexcept {
+  if consteval {
+    return table;
+  } else {
+    return table_at_run_time();
+  }
+}
+
+
 }  // namespace alef::tables::confusable_data
 
 export namespace alef::tables {
 
 // A code point's prototype, or nothing where it has none.
 constexpr std::span<const char32_t> prototype_of(char32_t code_point) noexcept {
-  const auto& all = confusable_data::table.entries;
+  const auto& all = confusable_data::table_now().entries;
   const auto found = std::ranges::lower_bound(all, code_point, {}, &confusable_data::entry::source);
   if (found == all.end() || found->source != code_point)
     return {};
-  return {confusable_data::table.pool.data() + found->first, found->length};
+  return {confusable_data::table_now().pool.data() + found->first, found->length};
 }
 
 }  // namespace alef::tables

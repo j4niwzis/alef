@@ -108,6 +108,21 @@ inline constexpr laid_out table = [] {
   return out;
 }();
 
+// What `table` holds, read at run time from this module's own object, where it
+// was made once; in a constant evaluation, `table` itself. A module file keeps a
+// constant's value only where it is a number (clang's
+// ASTRecordWriter::AddVarDeclInit), so a unit whose code read `table` made it
+// again from the Unicode data: 64 of a mux UI unit's 71 seconds.
+const decltype(table)& table_at_run_time() noexcept { return table; }
+constexpr const decltype(table)& table_now() noexcept {
+  if consteval {
+    return table;
+  } else {
+    return table_at_run_time();
+  }
+}
+
+
 }  // namespace alef::tables::nfkc_casefold_data
 
 export namespace alef::tables {
@@ -116,11 +131,11 @@ export namespace alef::tables {
 // A mapping may be empty: the code point is removed.
 constexpr std::optional<std::span<const char32_t>> nfkc_casefold_of(char32_t code_point) noexcept {
   using nfkc_casefold_data::entry;
-  const auto& all = nfkc_casefold_data::table.entries;
+  const auto& all = nfkc_casefold_data::table_now().entries;
   const auto after = std::ranges::upper_bound(all, code_point, {}, &entry::first);
   if (after == all.begin() || code_point > std::prev(after)->last)
     return std::nullopt;
-  return std::span<const char32_t>(nfkc_casefold_data::table.pool.data() + std::prev(after)->at,
+  return std::span<const char32_t>(nfkc_casefold_data::table_now().pool.data() + std::prev(after)->at,
                                    std::prev(after)->length);
 }
 

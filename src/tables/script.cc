@@ -72,13 +72,28 @@ inline constexpr std::array<script_names, count> names = [] {
   return out;
 }();
 
+// What `names` holds, read at run time from this module's own object, where it
+// was made once; in a constant evaluation, `names` itself. A module file keeps a
+// constant's value only where it is a number (clang's
+// ASTRecordWriter::AddVarDeclInit), so a unit whose code read `names` made it
+// again from the Unicode data: 64 of a mux UI unit's 71 seconds.
+const decltype(names)& names_at_run_time() noexcept { return names; }
+constexpr const decltype(names)& names_now() noexcept {
+  if consteval {
+    return names;
+  } else {
+    return names_at_run_time();
+  }
+}
+
+
 // The scripts sorted by name and by code, to be looked up by either.
 template <auto Key>
 inline constexpr std::array<std::uint8_t, count> sorted_by = [] {
   std::array<std::uint8_t, count> out{};
   for (std::size_t at = 0; at < count; ++at)
     out[at] = static_cast<std::uint8_t>(at);
-  std::ranges::sort(out, {}, [](std::uint8_t index) { return names[index].*Key; });
+  std::ranges::sort(out, {}, [](std::uint8_t index) { return names_now()[index].*Key; });
   return out;
 }();
 
@@ -86,8 +101,8 @@ template <auto Key>
 constexpr std::optional<std::uint8_t> index_by(std::string_view key) noexcept {
   const auto& sorted = sorted_by<Key>;
   const auto found = std::ranges::lower_bound(
-      sorted, key, {}, [](std::uint8_t index) { return names[index].*Key; });
-  if (found == sorted.end() || names[*found].*Key != key)
+      sorted, key, {}, [](std::uint8_t index) { return names_now()[index].*Key; });
+  if (found == sorted.end() || names_now()[*found].*Key != key)
     return std::nullopt;
   return *found;
 }
@@ -117,6 +132,21 @@ inline constexpr std::size_t blocks =
     ucd::lay_out(runs()).blocks.size() / ucd::block_size;
 inline constexpr auto table =
     ucd::two_stage<std::uint8_t, blocks>(ucd::lay_out(runs()));
+
+// What `table` holds, read at run time from this module's own object, where it
+// was made once; in a constant evaluation, `table` itself. A module file keeps a
+// constant's value only where it is a number (clang's
+// ASTRecordWriter::AddVarDeclInit), so a unit whose code read `table` made it
+// again from the Unicode data: 64 of a mux UI unit's 71 seconds.
+const decltype(table)& table_at_run_time() noexcept { return table; }
+constexpr const decltype(table)& table_now() noexcept {
+  if consteval {
+    return table;
+  } else {
+    return table_at_run_time();
+  }
+}
+
 
 // Script_Extensions: a set of scripts for each code point the file lists, in
 // codes split by spaces. The same set is kept once, and a code point is the
@@ -190,6 +220,21 @@ inline constexpr extension_tables extensions = [] {
   return out;
 }();
 
+// What `extensions` holds, read at run time from this module's own object, where it
+// was made once; in a constant evaluation, `extensions` itself. A module file keeps a
+// constant's value only where it is a number (clang's
+// ASTRecordWriter::AddVarDeclInit), so a unit whose code read `extensions` made it
+// again from the Unicode data: 64 of a mux UI unit's 71 seconds.
+const decltype(extensions)& extensions_at_run_time() noexcept { return extensions; }
+constexpr const decltype(extensions)& extensions_now() noexcept {
+  if consteval {
+    return extensions;
+  } else {
+    return extensions_at_run_time();
+  }
+}
+
+
 }  // namespace alef::tables::script_data
 
 export namespace alef::tables {
@@ -197,10 +242,10 @@ export namespace alef::tables {
 constexpr std::size_t script_count() noexcept { return script_data::count; }
 
 constexpr std::string_view script_code(std::uint8_t index) noexcept {
-  return script_data::names[index].code;
+  return script_data::names_now()[index].code;
 }
 constexpr std::string_view script_name(std::uint8_t index) noexcept {
-  return script_data::names[index].name;
+  return script_data::names_now()[index].name;
 }
 
 // The index of the script with this name or code; Unknown's, 0, where no
@@ -214,18 +259,18 @@ constexpr std::uint8_t script_index(std::string_view name_or_code) noexcept {
 }
 
 constexpr std::uint8_t script_of(char32_t code_point) noexcept {
-  return script_data::table[code_point];
+  return script_data::table_now()[code_point];
 }
 
 // The scripts Script_Extensions gives `code_point`, where ScriptExtensions.txt
 // lists it; nothing where it does not, and its script is all there is.
 constexpr std::span<const std::uint8_t> script_extensions_of(
     char32_t code_point) noexcept {
-  const std::uint16_t number = script_data::extensions.table[code_point];
+  const std::uint16_t number = script_data::extensions_now().table[code_point];
   if (number == 0)
     return {};
-  const auto [offset, length] = script_data::extensions.sets[number - 1];
-  return {script_data::extensions.pool.data() + offset, length};
+  const auto [offset, length] = script_data::extensions_now().sets[number - 1];
+  return {script_data::extensions_now().pool.data() + offset, length};
 }
 
 }  // namespace alef::tables

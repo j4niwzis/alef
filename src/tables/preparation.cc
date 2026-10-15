@@ -103,18 +103,33 @@ inline constexpr std::size_t blocks =
 inline constexpr auto table =
     ucd::two_stage<std::uint8_t, blocks>(ucd::lay_out(runs()));
 
+// What `table` holds, read at run time from this module's own object, where it
+// was made once; in a constant evaluation, `table` itself. A module file keeps a
+// constant's value only where it is a number (clang's
+// ASTRecordWriter::AddVarDeclInit), so a unit whose code read `table` made it
+// again from the Unicode data: 64 of a mux UI unit's 71 seconds.
+const decltype(table)& table_at_run_time() noexcept { return table; }
+constexpr const decltype(table)& table_now() noexcept {
+  if consteval {
+    return table;
+  } else {
+    return table_at_run_time();
+  }
+}
+
+
 }  // namespace alef::tables::preparation_data
 
 export namespace alef::tables {
 
 constexpr alef::joining_type joining_type_of(char32_t code_point) noexcept {
-  return static_cast<alef::joining_type>(preparation_data::table[code_point] & 7);
+  return static_cast<alef::joining_type>(preparation_data::table_now()[code_point] & 7);
 }
 constexpr bool conjoining_jamo(char32_t code_point) noexcept {
-  return (preparation_data::table[code_point] & 8) != 0;
+  return (preparation_data::table_now()[code_point] & 8) != 0;
 }
 constexpr bool wide_or_narrow(char32_t code_point) noexcept {
-  return (preparation_data::table[code_point] & 16) != 0;
+  return (preparation_data::table_now()[code_point] & 16) != 0;
 }
 
 }  // namespace alef::tables

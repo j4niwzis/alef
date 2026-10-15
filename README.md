@@ -217,7 +217,7 @@ void show(std::string_view text) {
 }
 ```
 
-- **Emoji** (UTS #51). `alef::emoji_groups` and `alef::emoji_all` are
+- **Emoji** (UTS #51). `alef::emoji_groups()` and `alef::emoji_all()` are
   Unicode's emoji as emoji-test.txt lists them for keyboards and palettes:
   the fully-qualified ones, in CLDR's order and groups, each with its text
   in UTF-8, its name, and whether it is a skin tone's variant of another.

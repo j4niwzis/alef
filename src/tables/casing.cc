@@ -246,12 +246,27 @@ inline constexpr all_tables table = [] {
   return out;
 }();
 
+// What `table` holds, read at run time from this module's own object, where it
+// was made once; in a constant evaluation, `table` itself. A module file keeps a
+// constant's value only where it is a number (clang's
+// ASTRecordWriter::AddVarDeclInit), so a unit whose code read `table` made it
+// again from the Unicode data: 64 of a mux UI unit's 71 seconds.
+const decltype(table)& table_at_run_time() noexcept { return table; }
+constexpr const decltype(table)& table_now() noexcept {
+  if consteval {
+    return table;
+  } else {
+    return table_at_run_time();
+  }
+}
+
+
 constexpr const mapping* mapping_of(char32_t code_point) noexcept {
-  if ((table.flags[code_point] & mapped_bit) == 0)
+  if ((table_now().flags[code_point] & mapped_bit) == 0)
     return nullptr;
-  const auto found = std::ranges::lower_bound(table.mappings, code_point, {},
+  const auto found = std::ranges::lower_bound(table_now().mappings, code_point, {},
                                               &mapping::code_point);
-  return found != table.mappings.end() && found->code_point == code_point ? &*found
+  return found != table_now().mappings.end() && found->code_point == code_point ? &*found
                                                                           : nullptr;
 }
 
@@ -263,13 +278,13 @@ export namespace alef::tables {
 enum class casing : std::uint8_t { lower, upper, title, fold };
 
 constexpr bool is_cased(char32_t code_point) noexcept {
-  return (casing_data::table.flags[code_point] & casing_data::cased_bit) != 0;
+  return (casing_data::table_now().flags[code_point] & casing_data::cased_bit) != 0;
 }
 constexpr bool is_case_ignorable(char32_t code_point) noexcept {
-  return (casing_data::table.flags[code_point] & casing_data::case_ignorable_bit) != 0;
+  return (casing_data::table_now().flags[code_point] & casing_data::case_ignorable_bit) != 0;
 }
 constexpr bool is_soft_dotted(char32_t code_point) noexcept {
-  return (casing_data::table.flags[code_point] & casing_data::soft_dotted_bit) != 0;
+  return (casing_data::table_now().flags[code_point] & casing_data::soft_dotted_bit) != 0;
 }
 
 // The simple mapping: one code point, itself where it has none.
@@ -299,14 +314,14 @@ constexpr std::u32string_view full(casing which, char32_t code_point) noexcept {
   const casing_data::mapping* one = casing_data::mapping_of(code_point);
   if (one == nullptr || one->special == 0)
     return {};
-  const casing_data::special& found = casing_data::table.specials[one->special - 1];
+  const casing_data::special& found = casing_data::table_now().specials[one->special - 1];
   const casing_data::slice& part = which == casing::lower   ? found.lower
                                    : which == casing::upper ? found.upper
                                    : which == casing::title ? found.title
                                                             : found.fold;
   if (part.length == 0)
     return {};
-  return {casing_data::table.pool.data() + part.offset, part.length};
+  return {casing_data::table_now().pool.data() + part.offset, part.length};
 }
 
 }  // namespace alef::tables
