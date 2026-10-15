@@ -317,14 +317,17 @@ constexpr std::u32string_view full(casing which, char32_t code_point) noexcept {
   const casing_data::mapping* one = casing_data::mapping_of(code_point);
   if (one == nullptr || one->special == 0)
     return {};
-  const casing_data::special& found = casing_data::table_now().specials[one->special - 1];
-  const casing_data::slice& part = which == casing::lower   ? found.lower
-                                   : which == casing::upper ? found.upper
-                                   : which == casing::title ? found.title
-                                                            : found.fold;
-  if (part.length == 0)
+  // No const or reference local holds what is read of the table (clang
+  // evaluates such an initializer as a constant where this is emitted, and
+  // there if consteval is taken): pointers and plain values.
+  const casing_data::special* found = &casing_data::table_now().specials[one->special - 1];
+  const casing_data::slice* part = which == casing::lower   ? &found->lower
+                                   : which == casing::upper ? &found->upper
+                                   : which == casing::title ? &found->title
+                                                            : &found->fold;
+  if (part->length == 0)
     return {};
-  return {casing_data::table_now().pool.data() + part.offset, part.length};
+  return {casing_data::table_now().pool.data() + part->offset, part->length};
 }
 
 }  // namespace alef::tables

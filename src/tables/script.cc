@@ -290,10 +290,13 @@ constexpr std::uint8_t script_of(char32_t code_point) noexcept {
 // lists it; nothing where it does not, and its script is all there is.
 constexpr std::span<const std::uint8_t> script_extensions_of(
     char32_t code_point) noexcept {
-  const std::uint16_t number = script_data::extensions_now().table[code_point];
+  // No const or reference local holds what is read of the table (clang
+  // evaluates such an initializer as a constant where this is emitted, and
+  // there if consteval is taken): pointers and plain values.
+  std::uint16_t number = script_data::extensions_now().table[code_point];
   if (number == 0)
     return {};
-  const auto [offset, length] = script_data::extensions_now().sets[number - 1];
+  auto [offset, length] = script_data::extensions_now().sets[number - 1];
   return {script_data::extensions_now().pool.data() + offset, length};
 }
 
