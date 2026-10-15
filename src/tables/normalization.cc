@@ -345,7 +345,10 @@ constexpr const decltype(table)& table_now() noexcept {
 
 
 constexpr const decomposition* decomposition_of(char32_t code_point) noexcept {
-  const auto found = std::ranges::lower_bound(table_now().decompositions, code_point,
+  // No const or reference local here holds what is read of the table: clang
+  // evaluates such a local's initializer as a constant where the function is
+  // emitted -- if consteval taken, the table made again in each importer.
+  auto found = std::ranges::lower_bound(table_now().decompositions, code_point,
                                               {}, &decomposition::code_point);
   return found != table_now().decompositions.end() && found->code_point == code_point
              ? &*found
@@ -401,13 +404,16 @@ constexpr std::u32string_view compatibility_decomposition(
 // What `first` and `second` compose to, where they are a primary composite's
 // canonical mapping; 0 where they are not. Hangul is not here either.
 constexpr char32_t primary_composite(char32_t first, char32_t second) noexcept {
-  const auto& all = normalization_data::table_now().compositions;
-  const auto found = std::ranges::lower_bound(
-      all, std::pair(first, second), {},
+  // No const or reference local here holds what is read of the table: clang
+  // evaluates such a local's initializer as a constant where the function is
+  // emitted -- if consteval taken, the table made again in each importer.
+  const auto* all = &normalization_data::table_now().compositions;
+  auto found = std::ranges::lower_bound(
+      *all, std::pair(first, second), {},
       [](const normalization_data::composition& one) {
         return std::pair(one.first, one.second);
       });
-  return found != all.end() && found->first == first && found->second == second
+  return found != all->end() && found->first == first && found->second == second
              ? found->composite
              : 0;
 }

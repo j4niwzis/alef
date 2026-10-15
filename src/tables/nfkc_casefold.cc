@@ -131,9 +131,12 @@ export namespace alef::tables {
 // A mapping may be empty: the code point is removed.
 constexpr std::optional<std::span<const char32_t>> nfkc_casefold_of(char32_t code_point) noexcept {
   using nfkc_casefold_data::entry;
-  const auto& all = nfkc_casefold_data::table_now().entries;
-  const auto after = std::ranges::upper_bound(all, code_point, {}, &entry::first);
-  if (after == all.begin() || code_point > std::prev(after)->last)
+  // No const or reference local here holds what is read of the table: clang
+  // evaluates such a local's initializer as a constant where the function is
+  // emitted -- if consteval taken, the table made again in each importer.
+  const auto* all = &nfkc_casefold_data::table_now().entries;
+  auto after = std::ranges::upper_bound(*all, code_point, {}, &entry::first);
+  if (after == all->begin() || code_point > std::prev(after)->last)
     return std::nullopt;
   return std::span<const char32_t>(nfkc_casefold_data::table_now().pool.data() + std::prev(after)->at,
                                    std::prev(after)->length);

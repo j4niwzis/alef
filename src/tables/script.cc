@@ -114,10 +114,13 @@ template <auto Key> constexpr const std::array<std::uint8_t, count>& sorted_by_n
 
 template <auto Key>
 constexpr std::optional<std::uint8_t> index_by(std::string_view key) noexcept {
-  const auto& sorted = sorted_by_now<Key>();
-  const auto found = std::ranges::lower_bound(
-      sorted, key, {}, [](std::uint8_t index) { return names_now()[index].*Key; });
-  if (found == sorted.end() || names_now()[*found].*Key != key)
+  // No const or reference local here holds what is read of the table: clang
+  // evaluates such a local's initializer as a constant where the function is
+  // emitted -- if consteval taken, the table made again in each importer.
+  const auto* sorted = &sorted_by_now<Key>();
+  auto found = std::ranges::lower_bound(
+      *sorted, key, {}, [](std::uint8_t index) { return names_now()[index].*Key; });
+  if (found == sorted->end() || names_now()[*found].*Key != key)
     return std::nullopt;
   return *found;
 }

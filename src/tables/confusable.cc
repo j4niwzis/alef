@@ -124,9 +124,12 @@ export namespace alef::tables {
 
 // A code point's prototype, or nothing where it has none.
 constexpr std::span<const char32_t> prototype_of(char32_t code_point) noexcept {
-  const auto& all = confusable_data::table_now().entries;
-  const auto found = std::ranges::lower_bound(all, code_point, {}, &confusable_data::entry::source);
-  if (found == all.end() || found->source != code_point)
+  // No const or reference local here holds what is read of the table: clang
+  // evaluates such a local's initializer as a constant where the function is
+  // emitted -- if consteval taken, the table made again in each importer.
+  const auto* all = &confusable_data::table_now().entries;
+  auto found = std::ranges::lower_bound(*all, code_point, {}, &confusable_data::entry::source);
+  if (found == all->end() || found->source != code_point)
     return {};
   return {confusable_data::table_now().pool.data() + found->first, found->length};
 }

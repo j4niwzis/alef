@@ -264,7 +264,10 @@ constexpr const decltype(table)& table_now() noexcept {
 constexpr const mapping* mapping_of(char32_t code_point) noexcept {
   if ((table_now().flags[code_point] & mapped_bit) == 0)
     return nullptr;
-  const auto found = std::ranges::lower_bound(table_now().mappings, code_point, {},
+  // No const or reference local here holds what is read of the table: clang
+  // evaluates such a local's initializer as a constant where the function is
+  // emitted -- if consteval taken, the table made again in each importer.
+  auto found = std::ranges::lower_bound(table_now().mappings, code_point, {},
                                               &mapping::code_point);
   return found != table_now().mappings.end() && found->code_point == code_point ? &*found
                                                                           : nullptr;
