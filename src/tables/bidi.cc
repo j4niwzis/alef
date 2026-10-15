@@ -240,23 +240,66 @@ struct bidi_properties {
   constexpr bool mirrored() const noexcept { return (bits & bidi_data::mirrored_bit) != 0; }
 };
 
-constexpr bidi_properties bidi_properties_of(char32_t code_point) noexcept {
+constexpr bidi_properties bidi_properties_of(char32_t code_point) noexcept;
+
+}  // namespace alef::tables
+
+namespace alef::tables::bidi_data {
+
+constexpr bidi_properties bidi_properties_of_body(char32_t code_point) noexcept {
   return {bidi_data::table_now()[code_point]};
 }
+bidi_properties bidi_properties_of_at_run_time(char32_t code_point) noexcept {
+  return bidi_properties_of_body(code_point);
+}
 
-// The other bracket of a paired bracket; 0 where it is not one.
-constexpr char32_t paired_bracket(char32_t code_point) noexcept {
+constexpr char32_t paired_bracket_body(char32_t code_point) noexcept {
   const bidi_properties properties = bidi_properties_of(code_point);
   if (!properties.opening_bracket() && !properties.closing_bracket())
     return 0;
   return ucd::lookup(bidi_data::pairs_now(), code_point, char32_t{0});
 }
+char32_t paired_bracket_at_run_time(char32_t code_point) noexcept {
+  return paired_bracket_body(code_point);
+}
 
-// The Bidi_Mirroring_Glyph; 0 where there is none.
-constexpr char32_t mirroring_glyph(char32_t code_point) noexcept {
+constexpr char32_t mirroring_glyph_body(char32_t code_point) noexcept {
   if (!bidi_properties_of(code_point).mirrored())
     return 0;
   return ucd::lookup(bidi_data::mirrors_now(), code_point, char32_t{0});
+}
+char32_t mirroring_glyph_at_run_time(char32_t code_point) noexcept {
+  return mirroring_glyph_body(code_point);
+}
+
+}  // namespace alef::tables::bidi_data
+
+export namespace alef::tables {
+
+constexpr bidi_properties bidi_properties_of(char32_t code_point) noexcept {
+  if consteval {
+    return bidi_data::bidi_properties_of_body(code_point);
+  } else {
+    return bidi_data::bidi_properties_of_at_run_time(code_point);
+  }
+}
+
+// The other bracket of a paired bracket; 0 where it is not one.
+constexpr char32_t paired_bracket(char32_t code_point) noexcept {
+  if consteval {
+    return bidi_data::paired_bracket_body(code_point);
+  } else {
+    return bidi_data::paired_bracket_at_run_time(code_point);
+  }
+}
+
+// The Bidi_Mirroring_Glyph; 0 where there is none.
+constexpr char32_t mirroring_glyph(char32_t code_point) noexcept {
+  if consteval {
+    return bidi_data::mirroring_glyph_body(code_point);
+  } else {
+    return bidi_data::mirroring_glyph_at_run_time(code_point);
+  }
 }
 
 }  // namespace alef::tables

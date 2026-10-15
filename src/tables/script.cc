@@ -259,36 +259,39 @@ constexpr const decltype(extensions)& extensions_now() noexcept {
 }
 
 
-}  // namespace alef::tables::script_data
-
-export namespace alef::tables {
-
-constexpr std::size_t script_count() noexcept { return script_data::count; }
-
-constexpr std::string_view script_code(std::uint8_t index) noexcept {
+constexpr std::string_view script_code_body(std::uint8_t index) noexcept {
   return script_data::names_now()[index].code;
 }
-constexpr std::string_view script_name(std::uint8_t index) noexcept {
-  return script_data::names_now()[index].name;
+std::string_view script_code_at_run_time(std::uint8_t index) noexcept {
+  return script_code_body(index);
 }
 
-// The index of the script with this name or code; Unknown's, 0, where no
-// script has it.
-constexpr std::uint8_t script_index(std::string_view name_or_code) noexcept {
+constexpr std::string_view script_name_body(std::uint8_t index) noexcept {
+  return script_data::names_now()[index].name;
+}
+std::string_view script_name_at_run_time(std::uint8_t index) noexcept {
+  return script_name_body(index);
+}
+
+constexpr std::uint8_t script_index_body(std::string_view name_or_code) noexcept {
   if (const auto index =
           script_data::index_by<&script_data::script_names::name>(name_or_code))
     return *index;
   return script_data::index_by<&script_data::script_names::code>(name_or_code)
       .value_or(0);
 }
-
-constexpr std::uint8_t script_of(char32_t code_point) noexcept {
-  return script_data::table_now()[code_point];
+std::uint8_t script_index_at_run_time(std::string_view name_or_code) noexcept {
+  return script_index_body(name_or_code);
 }
 
-// The scripts Script_Extensions gives `code_point`, where ScriptExtensions.txt
-// lists it; nothing where it does not, and its script is all there is.
-constexpr std::span<const std::uint8_t> script_extensions_of(
+constexpr std::uint8_t script_of_body(char32_t code_point) noexcept {
+  return script_data::table_now()[code_point];
+}
+std::uint8_t script_of_at_run_time(char32_t code_point) noexcept {
+  return script_of_body(code_point);
+}
+
+constexpr std::span<const std::uint8_t> script_extensions_of_body(
     char32_t code_point) noexcept {
   // No const or reference local holds what is read of the table (clang
   // evaluates such an initializer as a constant where this is emitted, and
@@ -298,6 +301,60 @@ constexpr std::span<const std::uint8_t> script_extensions_of(
     return {};
   auto [offset, length] = script_data::extensions_now().sets[number - 1];
   return {script_data::extensions_now().pool.data() + offset, length};
+}
+std::span<const std::uint8_t> script_extensions_of_at_run_time(
+    char32_t code_point) noexcept {
+  return script_extensions_of_body(code_point);
+}
+
+}  // namespace alef::tables::script_data
+
+export namespace alef::tables {
+
+constexpr std::size_t script_count() noexcept { return script_data::count; }
+
+constexpr std::string_view script_code(std::uint8_t index) noexcept {
+  if consteval {
+    return script_data::script_code_body(index);
+  } else {
+    return script_data::script_code_at_run_time(index);
+  }
+}
+constexpr std::string_view script_name(std::uint8_t index) noexcept {
+  if consteval {
+    return script_data::script_name_body(index);
+  } else {
+    return script_data::script_name_at_run_time(index);
+  }
+}
+
+// The index of the script with this name or code; Unknown's, 0, where no
+// script has it.
+constexpr std::uint8_t script_index(std::string_view name_or_code) noexcept {
+  if consteval {
+    return script_data::script_index_body(name_or_code);
+  } else {
+    return script_data::script_index_at_run_time(name_or_code);
+  }
+}
+
+constexpr std::uint8_t script_of(char32_t code_point) noexcept {
+  if consteval {
+    return script_data::script_of_body(code_point);
+  } else {
+    return script_data::script_of_at_run_time(code_point);
+  }
+}
+
+// The scripts Script_Extensions gives `code_point`, where ScriptExtensions.txt
+// lists it; nothing where it does not, and its script is all there is.
+constexpr std::span<const std::uint8_t> script_extensions_of(
+    char32_t code_point) noexcept {
+  if consteval {
+    return script_data::script_extensions_of_body(code_point);
+  } else {
+    return script_data::script_extensions_of_at_run_time(code_point);
+  }
 }
 
 }  // namespace alef::tables

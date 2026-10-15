@@ -138,12 +138,23 @@ constexpr const decltype(table)& table_now() noexcept {
 }
 
 
+constexpr general_category general_category_of_body(char32_t code_point) noexcept {
+  return general_category_data::table_now()[code_point];
+}
+general_category general_category_of_at_run_time(char32_t code_point) noexcept {
+  return general_category_of_body(code_point);
+}
+
 }  // namespace alef::tables::general_category_data
 
 export namespace alef::tables {
 
 constexpr general_category general_category_of(char32_t code_point) noexcept {
-  return general_category_data::table_now()[code_point];
+  if consteval {
+    return general_category_data::general_category_of_body(code_point);
+  } else {
+    return general_category_data::general_category_of_at_run_time(code_point);
+  }
 }
 
 }  // namespace alef::tables

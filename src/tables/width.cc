@@ -128,13 +128,7 @@ constexpr const decltype(table)& table_now() noexcept {
 }
 
 
-}  // namespace alef::tables::width_data
-
-export namespace alef::tables {
-
-// 0, 1 or 2 columns; or -1, which is ambiguous: one or two as the text is
-// East Asian or not.
-constexpr int columns_of(char32_t code_point) noexcept {
+constexpr int columns_of_body(char32_t code_point) noexcept {
   switch (width_data::table_now()[code_point]) {
     case width_data::no_column:
       return 0;
@@ -144,6 +138,23 @@ constexpr int columns_of(char32_t code_point) noexcept {
       return -1;
     default:
       return 1;
+  }
+}
+int columns_of_at_run_time(char32_t code_point) noexcept {
+  return columns_of_body(code_point);
+}
+
+}  // namespace alef::tables::width_data
+
+export namespace alef::tables {
+
+// 0, 1 or 2 columns; or -1, which is ambiguous: one or two as the text is
+// East Asian or not.
+constexpr int columns_of(char32_t code_point) noexcept {
+  if consteval {
+    return width_data::columns_of_body(code_point);
+  } else {
+    return width_data::columns_of_at_run_time(code_point);
   }
 }
 

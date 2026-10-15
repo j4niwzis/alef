@@ -118,12 +118,7 @@ constexpr const decltype(table)& table_now() noexcept {
 }
 
 
-}  // namespace alef::tables::confusable_data
-
-export namespace alef::tables {
-
-// A code point's prototype, or nothing where it has none.
-constexpr std::span<const char32_t> prototype_of(char32_t code_point) noexcept {
+constexpr std::span<const char32_t> prototype_of_body(char32_t code_point) noexcept {
   // No const or reference local here holds what is read of the table: clang
   // evaluates such a local's initializer as a constant where the function is
   // emitted -- if consteval taken, the table made again in each importer.
@@ -132,6 +127,22 @@ constexpr std::span<const char32_t> prototype_of(char32_t code_point) noexcept {
   if (found == all->end() || found->source != code_point)
     return {};
   return {confusable_data::table_now().pool.data() + found->first, found->length};
+}
+std::span<const char32_t> prototype_of_at_run_time(char32_t code_point) noexcept {
+  return prototype_of_body(code_point);
+}
+
+}  // namespace alef::tables::confusable_data
+
+export namespace alef::tables {
+
+// A code point's prototype, or nothing where it has none.
+constexpr std::span<const char32_t> prototype_of(char32_t code_point) noexcept {
+  if consteval {
+    return confusable_data::prototype_of_body(code_point);
+  } else {
+    return confusable_data::prototype_of_at_run_time(code_point);
+  }
 }
 
 }  // namespace alef::tables

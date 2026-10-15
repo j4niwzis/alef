@@ -155,8 +155,27 @@ struct word_properties {
   constexpr bool pictographic() const noexcept { return (bits & 0x20) != 0; }
 };
 
-constexpr word_properties word_properties_of(char32_t code_point) noexcept {
+}  // namespace alef::tables
+
+namespace alef::tables::word_data {
+
+constexpr word_properties word_properties_of_body(char32_t code_point) noexcept {
   return {word_data::table_now()[code_point]};
+}
+word_properties word_properties_of_at_run_time(char32_t code_point) noexcept {
+  return word_properties_of_body(code_point);
+}
+
+}  // namespace alef::tables::word_data
+
+export namespace alef::tables {
+
+constexpr word_properties word_properties_of(char32_t code_point) noexcept {
+  if consteval {
+    return word_data::word_properties_of_body(code_point);
+  } else {
+    return word_data::word_properties_of_at_run_time(code_point);
+  }
 }
 
 }  // namespace alef::tables

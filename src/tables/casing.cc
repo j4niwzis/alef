@@ -280,18 +280,34 @@ export namespace alef::tables {
 // Which of the mappings.
 enum class casing : std::uint8_t { lower, upper, title, fold };
 
-constexpr bool is_cased(char32_t code_point) noexcept {
+constexpr char32_t simple(casing which, char32_t code_point) noexcept;
+
+}  // namespace alef::tables
+
+namespace alef::tables::casing_data {
+
+constexpr bool is_cased_body(char32_t code_point) noexcept {
   return (casing_data::table_now().flags[code_point] & casing_data::cased_bit) != 0;
 }
-constexpr bool is_case_ignorable(char32_t code_point) noexcept {
-  return (casing_data::table_now().flags[code_point] & casing_data::case_ignorable_bit) != 0;
-}
-constexpr bool is_soft_dotted(char32_t code_point) noexcept {
-  return (casing_data::table_now().flags[code_point] & casing_data::soft_dotted_bit) != 0;
+bool is_cased_at_run_time(char32_t code_point) noexcept {
+  return is_cased_body(code_point);
 }
 
-// The simple mapping: one code point, itself where it has none.
-constexpr char32_t simple(casing which, char32_t code_point) noexcept {
+constexpr bool is_case_ignorable_body(char32_t code_point) noexcept {
+  return (casing_data::table_now().flags[code_point] & casing_data::case_ignorable_bit) != 0;
+}
+bool is_case_ignorable_at_run_time(char32_t code_point) noexcept {
+  return is_case_ignorable_body(code_point);
+}
+
+constexpr bool is_soft_dotted_body(char32_t code_point) noexcept {
+  return (casing_data::table_now().flags[code_point] & casing_data::soft_dotted_bit) != 0;
+}
+bool is_soft_dotted_at_run_time(char32_t code_point) noexcept {
+  return is_soft_dotted_body(code_point);
+}
+
+constexpr char32_t simple_body(casing which, char32_t code_point) noexcept {
   const casing_data::mapping* one = casing_data::mapping_of(code_point);
   if (one == nullptr)
     return code_point;
@@ -301,19 +317,21 @@ constexpr char32_t simple(casing which, char32_t code_point) noexcept {
                                                    : one->fold;
   return mapped != 0 ? mapped : code_point;
 }
+char32_t simple_at_run_time(casing which, char32_t code_point) noexcept {
+  return simple_body(which, code_point);
+}
 
-// The Turkic folding of the two code points that have one, and the simple
-// folding of every other.
-constexpr char32_t turkic_fold(char32_t code_point) noexcept {
+constexpr char32_t turkic_fold_body(char32_t code_point) noexcept {
   const casing_data::mapping* one = casing_data::mapping_of(code_point);
   if (one != nullptr && one->turkic_fold != 0)
     return one->turkic_fold;
   return simple(casing::fold, code_point);
 }
+char32_t turkic_fold_at_run_time(char32_t code_point) noexcept {
+  return turkic_fold_body(code_point);
+}
 
-// The unconditional full mapping, where it is not the simple one; nothing
-// where it is.
-constexpr std::u32string_view full(casing which, char32_t code_point) noexcept {
+constexpr std::u32string_view full_body(casing which, char32_t code_point) noexcept {
   const casing_data::mapping* one = casing_data::mapping_of(code_point);
   if (one == nullptr || one->special == 0)
     return {};
@@ -328,6 +346,64 @@ constexpr std::u32string_view full(casing which, char32_t code_point) noexcept {
   if (part->length == 0)
     return {};
   return {casing_data::table_now().pool.data() + part->offset, part->length};
+}
+std::u32string_view full_at_run_time(casing which, char32_t code_point) noexcept {
+  return full_body(which, code_point);
+}
+
+}  // namespace alef::tables::casing_data
+
+export namespace alef::tables {
+
+constexpr bool is_cased(char32_t code_point) noexcept {
+  if consteval {
+    return casing_data::is_cased_body(code_point);
+  } else {
+    return casing_data::is_cased_at_run_time(code_point);
+  }
+}
+constexpr bool is_case_ignorable(char32_t code_point) noexcept {
+  if consteval {
+    return casing_data::is_case_ignorable_body(code_point);
+  } else {
+    return casing_data::is_case_ignorable_at_run_time(code_point);
+  }
+}
+constexpr bool is_soft_dotted(char32_t code_point) noexcept {
+  if consteval {
+    return casing_data::is_soft_dotted_body(code_point);
+  } else {
+    return casing_data::is_soft_dotted_at_run_time(code_point);
+  }
+}
+
+// The simple mapping: one code point, itself where it has none.
+constexpr char32_t simple(casing which, char32_t code_point) noexcept {
+  if consteval {
+    return casing_data::simple_body(which, code_point);
+  } else {
+    return casing_data::simple_at_run_time(which, code_point);
+  }
+}
+
+// The Turkic folding of the two code points that have one, and the simple
+// folding of every other.
+constexpr char32_t turkic_fold(char32_t code_point) noexcept {
+  if consteval {
+    return casing_data::turkic_fold_body(code_point);
+  } else {
+    return casing_data::turkic_fold_at_run_time(code_point);
+  }
+}
+
+// The unconditional full mapping, where it is not the simple one; nothing
+// where it is.
+constexpr std::u32string_view full(casing which, char32_t code_point) noexcept {
+  if consteval {
+    return casing_data::full_body(which, code_point);
+  } else {
+    return casing_data::full_at_run_time(which, code_point);
+  }
 }
 
 }  // namespace alef::tables

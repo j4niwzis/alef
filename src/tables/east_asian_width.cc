@@ -90,12 +90,23 @@ constexpr const decltype(table)& table_now() noexcept {
 }
 
 
+constexpr east_asian_width east_asian_width_of_body(char32_t code_point) noexcept {
+  return east_asian_width_data::table_now()[code_point];
+}
+east_asian_width east_asian_width_of_at_run_time(char32_t code_point) noexcept {
+  return east_asian_width_of_body(code_point);
+}
+
 }  // namespace alef::tables::east_asian_width_data
 
 export namespace alef::tables {
 
 constexpr east_asian_width east_asian_width_of(char32_t code_point) noexcept {
-  return east_asian_width_data::table_now()[code_point];
+  if consteval {
+    return east_asian_width_data::east_asian_width_of_body(code_point);
+  } else {
+    return east_asian_width_data::east_asian_width_of_at_run_time(code_point);
+  }
 }
 
 }  // namespace alef::tables

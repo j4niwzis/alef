@@ -85,18 +85,51 @@ constexpr const decltype(table)& table_now() noexcept {
 }
 
 
+constexpr bool xid_start_body(char32_t code_point) noexcept {
+  return (identifier_data::table_now()[code_point] & 1) != 0;
+}
+bool xid_start_at_run_time(char32_t code_point) noexcept {
+  return xid_start_body(code_point);
+}
+
+constexpr bool xid_continue_body(char32_t code_point) noexcept {
+  return (identifier_data::table_now()[code_point] & 2) != 0;
+}
+bool xid_continue_at_run_time(char32_t code_point) noexcept {
+  return xid_continue_body(code_point);
+}
+
+constexpr bool default_ignorable_body(char32_t code_point) noexcept {
+  return (identifier_data::table_now()[code_point] & 4) != 0;
+}
+bool default_ignorable_at_run_time(char32_t code_point) noexcept {
+  return default_ignorable_body(code_point);
+}
+
 }  // namespace alef::tables::identifier_data
 
 export namespace alef::tables {
 
 constexpr bool xid_start(char32_t code_point) noexcept {
-  return (identifier_data::table_now()[code_point] & 1) != 0;
+  if consteval {
+    return identifier_data::xid_start_body(code_point);
+  } else {
+    return identifier_data::xid_start_at_run_time(code_point);
+  }
 }
 constexpr bool xid_continue(char32_t code_point) noexcept {
-  return (identifier_data::table_now()[code_point] & 2) != 0;
+  if consteval {
+    return identifier_data::xid_continue_body(code_point);
+  } else {
+    return identifier_data::xid_continue_at_run_time(code_point);
+  }
 }
 constexpr bool default_ignorable(char32_t code_point) noexcept {
-  return (identifier_data::table_now()[code_point] & 4) != 0;
+  if consteval {
+    return identifier_data::default_ignorable_body(code_point);
+  } else {
+    return identifier_data::default_ignorable_at_run_time(code_point);
+  }
 }
 
 }  // namespace alef::tables

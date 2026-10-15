@@ -99,12 +99,23 @@ constexpr const decltype(table)& table_now() noexcept {
 }
 
 
+constexpr alef::sentence_break sentence_break_of_body(char32_t code_point) noexcept {
+  return static_cast<alef::sentence_break>(sentence_data::table_now()[code_point]);
+}
+alef::sentence_break sentence_break_of_at_run_time(char32_t code_point) noexcept {
+  return sentence_break_of_body(code_point);
+}
+
 }  // namespace alef::tables::sentence_data
 
 export namespace alef::tables {
 
 constexpr alef::sentence_break sentence_break_of(char32_t code_point) noexcept {
-  return static_cast<alef::sentence_break>(sentence_data::table_now()[code_point]);
+  if consteval {
+    return sentence_data::sentence_break_of_body(code_point);
+  } else {
+    return sentence_data::sentence_break_of_at_run_time(code_point);
+  }
 }
 
 }  // namespace alef::tables

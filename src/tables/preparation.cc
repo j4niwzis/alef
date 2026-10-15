@@ -118,18 +118,51 @@ constexpr const decltype(table)& table_now() noexcept {
 }
 
 
+constexpr alef::joining_type joining_type_of_body(char32_t code_point) noexcept {
+  return static_cast<alef::joining_type>(preparation_data::table_now()[code_point] & 7);
+}
+alef::joining_type joining_type_of_at_run_time(char32_t code_point) noexcept {
+  return joining_type_of_body(code_point);
+}
+
+constexpr bool conjoining_jamo_body(char32_t code_point) noexcept {
+  return (preparation_data::table_now()[code_point] & 8) != 0;
+}
+bool conjoining_jamo_at_run_time(char32_t code_point) noexcept {
+  return conjoining_jamo_body(code_point);
+}
+
+constexpr bool wide_or_narrow_body(char32_t code_point) noexcept {
+  return (preparation_data::table_now()[code_point] & 16) != 0;
+}
+bool wide_or_narrow_at_run_time(char32_t code_point) noexcept {
+  return wide_or_narrow_body(code_point);
+}
+
 }  // namespace alef::tables::preparation_data
 
 export namespace alef::tables {
 
 constexpr alef::joining_type joining_type_of(char32_t code_point) noexcept {
-  return static_cast<alef::joining_type>(preparation_data::table_now()[code_point] & 7);
+  if consteval {
+    return preparation_data::joining_type_of_body(code_point);
+  } else {
+    return preparation_data::joining_type_of_at_run_time(code_point);
+  }
 }
 constexpr bool conjoining_jamo(char32_t code_point) noexcept {
-  return (preparation_data::table_now()[code_point] & 8) != 0;
+  if consteval {
+    return preparation_data::conjoining_jamo_body(code_point);
+  } else {
+    return preparation_data::conjoining_jamo_at_run_time(code_point);
+  }
 }
 constexpr bool wide_or_narrow(char32_t code_point) noexcept {
-  return (preparation_data::table_now()[code_point] & 16) != 0;
+  if consteval {
+    return preparation_data::wide_or_narrow_body(code_point);
+  } else {
+    return preparation_data::wide_or_narrow_at_run_time(code_point);
+  }
 }
 
 }  // namespace alef::tables

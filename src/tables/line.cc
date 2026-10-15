@@ -175,8 +175,27 @@ struct line_properties {
   constexpr bool combining_mark() const noexcept { return (bits & line_data::mark_bit) != 0; }
 };
 
-constexpr line_properties line_properties_of(char32_t code_point) noexcept {
+}  // namespace alef::tables
+
+namespace alef::tables::line_data {
+
+constexpr line_properties line_properties_of_body(char32_t code_point) noexcept {
   return {line_data::table_now()[code_point]};
+}
+line_properties line_properties_of_at_run_time(char32_t code_point) noexcept {
+  return line_properties_of_body(code_point);
+}
+
+}  // namespace alef::tables::line_data
+
+export namespace alef::tables {
+
+constexpr line_properties line_properties_of(char32_t code_point) noexcept {
+  if consteval {
+    return line_data::line_properties_of_body(code_point);
+  } else {
+    return line_data::line_properties_of_at_run_time(code_point);
+  }
 }
 
 }  // namespace alef::tables

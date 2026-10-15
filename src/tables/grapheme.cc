@@ -187,8 +187,27 @@ struct grapheme_properties {
   constexpr bool pictographic() const noexcept { return (bits & 0x40) != 0; }
 };
 
-constexpr grapheme_properties grapheme_properties_of(char32_t code_point) noexcept {
+}  // namespace alef::tables
+
+namespace alef::tables::grapheme_data {
+
+constexpr grapheme_properties grapheme_properties_of_body(char32_t code_point) noexcept {
   return {grapheme_data::table_now()[code_point]};
+}
+grapheme_properties grapheme_properties_of_at_run_time(char32_t code_point) noexcept {
+  return grapheme_properties_of_body(code_point);
+}
+
+}  // namespace alef::tables::grapheme_data
+
+export namespace alef::tables {
+
+constexpr grapheme_properties grapheme_properties_of(char32_t code_point) noexcept {
+  if consteval {
+    return grapheme_data::grapheme_properties_of_body(code_point);
+  } else {
+    return grapheme_data::grapheme_properties_of_at_run_time(code_point);
+  }
 }
 
 }  // namespace alef::tables

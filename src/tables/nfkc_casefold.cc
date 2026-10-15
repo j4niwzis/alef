@@ -123,13 +123,7 @@ constexpr const decltype(table)& table_now() noexcept {
 }
 
 
-}  // namespace alef::tables::nfkc_casefold_data
-
-export namespace alef::tables {
-
-// A code point's NFKC_Casefold mapping, or nothing where it maps to itself.
-// A mapping may be empty: the code point is removed.
-constexpr std::optional<std::span<const char32_t>> nfkc_casefold_of(char32_t code_point) noexcept {
+constexpr std::optional<std::span<const char32_t>> nfkc_casefold_of_body(char32_t code_point) noexcept {
   using nfkc_casefold_data::entry;
   // No const or reference local here holds what is read of the table: clang
   // evaluates such a local's initializer as a constant where the function is
@@ -140,6 +134,23 @@ constexpr std::optional<std::span<const char32_t>> nfkc_casefold_of(char32_t cod
     return std::nullopt;
   return std::span<const char32_t>(nfkc_casefold_data::table_now().pool.data() + std::prev(after)->at,
                                    std::prev(after)->length);
+}
+std::optional<std::span<const char32_t>> nfkc_casefold_of_at_run_time(char32_t code_point) noexcept {
+  return nfkc_casefold_of_body(code_point);
+}
+
+}  // namespace alef::tables::nfkc_casefold_data
+
+export namespace alef::tables {
+
+// A code point's NFKC_Casefold mapping, or nothing where it maps to itself.
+// A mapping may be empty: the code point is removed.
+constexpr std::optional<std::span<const char32_t>> nfkc_casefold_of(char32_t code_point) noexcept {
+  if consteval {
+    return nfkc_casefold_data::nfkc_casefold_of_body(code_point);
+  } else {
+    return nfkc_casefold_data::nfkc_casefold_of_at_run_time(code_point);
+  }
 }
 
 }  // namespace alef::tables

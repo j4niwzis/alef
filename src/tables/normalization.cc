@@ -364,17 +364,27 @@ constexpr std::u32string_view in_pool(std::uint16_t offset,
 
 export namespace alef::tables {
 
-constexpr std::uint8_t combining_class_of(char32_t code_point) noexcept {
+constexpr quick_checks quick_checks_of(char32_t code_point) noexcept;
+
+}  // namespace alef::tables
+
+namespace alef::tables::normalization_data {
+
+constexpr std::uint8_t combining_class_of_body(char32_t code_point) noexcept {
   return normalization_data::table_now().classes[code_point];
 }
-
-constexpr quick_checks quick_checks_of(char32_t code_point) noexcept {
-  return {normalization_data::table_now().checks[code_point]};
+std::uint8_t combining_class_of_at_run_time(char32_t code_point) noexcept {
+  return combining_class_of_body(code_point);
 }
 
-// The canonical decomposition of `code_point` all the way down, or nothing
-// where it has none. Hangul syllables are not here: they are arithmetic.
-constexpr std::u32string_view canonical_decomposition(
+constexpr quick_checks quick_checks_of_body(char32_t code_point) noexcept {
+  return {normalization_data::table_now().checks[code_point]};
+}
+quick_checks quick_checks_of_at_run_time(char32_t code_point) noexcept {
+  return quick_checks_of_body(code_point);
+}
+
+constexpr std::u32string_view canonical_decomposition_body(
     char32_t code_point) noexcept {
   if (quick_checks_of(code_point).nfd() == quick_check::yes)
     return {};
@@ -384,10 +394,12 @@ constexpr std::u32string_view canonical_decomposition(
   return normalization_data::in_pool(entry->canonical_offset,
                                      entry->canonical_length);
 }
+std::u32string_view canonical_decomposition_at_run_time(
+    char32_t code_point) noexcept {
+  return canonical_decomposition_body(code_point);
+}
 
-// And by compatibility, which is the canonical one where that is all there
-// is.
-constexpr std::u32string_view compatibility_decomposition(
+constexpr std::u32string_view compatibility_decomposition_body(
     char32_t code_point) noexcept {
   if (quick_checks_of(code_point).nfkd() == quick_check::yes)
     return {};
@@ -400,10 +412,12 @@ constexpr std::u32string_view compatibility_decomposition(
   return normalization_data::in_pool(entry->canonical_offset,
                                      entry->canonical_length);
 }
+std::u32string_view compatibility_decomposition_at_run_time(
+    char32_t code_point) noexcept {
+  return compatibility_decomposition_body(code_point);
+}
 
-// What `first` and `second` compose to, where they are a primary composite's
-// canonical mapping; 0 where they are not. Hangul is not here either.
-constexpr char32_t primary_composite(char32_t first, char32_t second) noexcept {
+constexpr char32_t primary_composite_body(char32_t first, char32_t second) noexcept {
   // No const or reference local here holds what is read of the table: clang
   // evaluates such a local's initializer as a constant where the function is
   // emitted -- if consteval taken, the table made again in each importer.
@@ -416,6 +430,61 @@ constexpr char32_t primary_composite(char32_t first, char32_t second) noexcept {
   return found != all->end() && found->first == first && found->second == second
              ? found->composite
              : 0;
+}
+char32_t primary_composite_at_run_time(char32_t first, char32_t second) noexcept {
+  return primary_composite_body(first, second);
+}
+
+}  // namespace alef::tables::normalization_data
+
+export namespace alef::tables {
+
+constexpr std::uint8_t combining_class_of(char32_t code_point) noexcept {
+  if consteval {
+    return normalization_data::combining_class_of_body(code_point);
+  } else {
+    return normalization_data::combining_class_of_at_run_time(code_point);
+  }
+}
+
+constexpr quick_checks quick_checks_of(char32_t code_point) noexcept {
+  if consteval {
+    return normalization_data::quick_checks_of_body(code_point);
+  } else {
+    return normalization_data::quick_checks_of_at_run_time(code_point);
+  }
+}
+
+// The canonical decomposition of `code_point` all the way down, or nothing
+// where it has none. Hangul syllables are not here: they are arithmetic.
+constexpr std::u32string_view canonical_decomposition(
+    char32_t code_point) noexcept {
+  if consteval {
+    return normalization_data::canonical_decomposition_body(code_point);
+  } else {
+    return normalization_data::canonical_decomposition_at_run_time(code_point);
+  }
+}
+
+// And by compatibility, which is the canonical one where that is all there
+// is.
+constexpr std::u32string_view compatibility_decomposition(
+    char32_t code_point) noexcept {
+  if consteval {
+    return normalization_data::compatibility_decomposition_body(code_point);
+  } else {
+    return normalization_data::compatibility_decomposition_at_run_time(code_point);
+  }
+}
+
+// What `first` and `second` compose to, where they are a primary composite's
+// canonical mapping; 0 where they are not. Hangul is not here either.
+constexpr char32_t primary_composite(char32_t first, char32_t second) noexcept {
+  if consteval {
+    return normalization_data::primary_composite_body(first, second);
+  } else {
+    return normalization_data::primary_composite_at_run_time(first, second);
+  }
 }
 
 }  // namespace alef::tables
