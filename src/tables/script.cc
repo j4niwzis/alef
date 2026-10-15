@@ -87,28 +87,34 @@ constexpr const decltype(names)& names_now() noexcept {
 }
 
 
-// The scripts sorted by name and by code, to be looked up by either.
-template <auto Key>
-inline constexpr std::array<std::uint8_t, count> sorted_by = [] {
+// The scripts sorted by name and by code, to be looked up by either: two
+// variables, made here -- a variable template's initializer is instantiated,
+// and evaluated, by an importer whose lookup names it (Gemini's trace).
+template <auto Key> constexpr std::array<std::uint8_t, count> sorted_by() {
   std::array<std::uint8_t, count> out{};
   for (std::size_t at = 0; at < count; ++at)
     out[at] = static_cast<std::uint8_t>(at);
   std::ranges::sort(out, {}, [](std::uint8_t index) { return names_now()[index].*Key; });
   return out;
-}();
+}
+inline constexpr std::array<std::uint8_t, count> by_name = sorted_by<&script_names::name>();
+inline constexpr std::array<std::uint8_t, count> by_code = sorted_by<&script_names::code>();
 
 // Each order read at run time from this module's own object, where it was
 // made once; in a constant evaluation, the order itself (as table_now()).
-const std::array<std::uint8_t, count>& sorted_by_name_at_run_time() noexcept { return sorted_by<&script_names::name>; }
-const std::array<std::uint8_t, count>& sorted_by_code_at_run_time() noexcept { return sorted_by<&script_names::code>; }
+const std::array<std::uint8_t, count>& by_name_at_run_time() noexcept { return by_name; }
+const std::array<std::uint8_t, count>& by_code_at_run_time() noexcept { return by_code; }
 template <auto Key> constexpr const std::array<std::uint8_t, count>& sorted_by_now() noexcept {
   if consteval {
-    return sorted_by<Key>;
+    if constexpr (Key == &script_names::name)
+      return by_name;
+    else
+      return by_code;
   } else {
     if constexpr (Key == &script_names::name)
-      return sorted_by_name_at_run_time();
+      return by_name_at_run_time();
     else
-      return sorted_by_code_at_run_time();
+      return by_code_at_run_time();
   }
 }
 
