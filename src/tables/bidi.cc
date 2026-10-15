@@ -164,6 +164,25 @@ constexpr std::optional<char32_t> mirror_of(const ucd::line& one) {
 
 constexpr auto pairs = ucd::property<char32_t, brackets_file, &pair_of>;
 constexpr auto mirrors = ucd::property<char32_t, mirroring_file, &mirror_of>;
+// The brackets' pairs and the mirrors, read at run time from this module's
+// own object, where they were made once; in a constant evaluation, they
+// themselves (as the tables below: table_now()).
+const decltype(pairs)& pairs_at_run_time() noexcept { return pairs; }
+constexpr const decltype(pairs)& pairs_now() noexcept {
+  if consteval {
+    return pairs;
+  } else {
+    return pairs_at_run_time();
+  }
+}
+const decltype(mirrors)& mirrors_at_run_time() noexcept { return mirrors; }
+constexpr const decltype(mirrors)& mirrors_now() noexcept {
+  if consteval {
+    return mirrors;
+  } else {
+    return mirrors_at_run_time();
+  }
+}
 
 inline constexpr std::uint8_t opening_bit = 0x20;
 inline constexpr std::uint8_t closing_bit = 0x40;
@@ -230,14 +249,14 @@ constexpr char32_t paired_bracket(char32_t code_point) noexcept {
   const bidi_properties properties = bidi_properties_of(code_point);
   if (!properties.opening_bracket() && !properties.closing_bracket())
     return 0;
-  return ucd::lookup(bidi_data::pairs, code_point, char32_t{0});
+  return ucd::lookup(bidi_data::pairs_now(), code_point, char32_t{0});
 }
 
 // The Bidi_Mirroring_Glyph; 0 where there is none.
 constexpr char32_t mirroring_glyph(char32_t code_point) noexcept {
   if (!bidi_properties_of(code_point).mirrored())
     return 0;
-  return ucd::lookup(bidi_data::mirrors, code_point, char32_t{0});
+  return ucd::lookup(bidi_data::mirrors_now(), code_point, char32_t{0});
 }
 
 }  // namespace alef::tables

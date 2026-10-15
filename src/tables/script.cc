@@ -97,9 +97,24 @@ inline constexpr std::array<std::uint8_t, count> sorted_by = [] {
   return out;
 }();
 
+// Each order read at run time from this module's own object, where it was
+// made once; in a constant evaluation, the order itself (as table_now()).
+const std::array<std::uint8_t, count>& sorted_by_name_at_run_time() noexcept { return sorted_by<&script_names::name>; }
+const std::array<std::uint8_t, count>& sorted_by_code_at_run_time() noexcept { return sorted_by<&script_names::code>; }
+template <auto Key> constexpr const std::array<std::uint8_t, count>& sorted_by_now() noexcept {
+  if consteval {
+    return sorted_by<Key>;
+  } else {
+    if constexpr (Key == &script_names::name)
+      return sorted_by_name_at_run_time();
+    else
+      return sorted_by_code_at_run_time();
+  }
+}
+
 template <auto Key>
 constexpr std::optional<std::uint8_t> index_by(std::string_view key) noexcept {
-  const auto& sorted = sorted_by<Key>;
+  const auto& sorted = sorted_by_now<Key>();
   const auto found = std::ranges::lower_bound(
       sorted, key, {}, [](std::uint8_t index) { return names_now()[index].*Key; });
   if (found == sorted.end() || names_now()[*found].*Key != key)
